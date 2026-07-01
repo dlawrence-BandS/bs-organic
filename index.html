@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B&S Organic Social — Instagram Performance</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+  :root{
+    --bg:#0d0a1a;--bg2:#130f24;--surface:#1a1530;--surface2:#221d3a;
+    --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+    --neon:#b8f000;--neon-pale:rgba(184,240,0,0.1);
+    --purple:#8b5cf6;--pink:#ec4899;--cyan:#06b6d4;--amber:#f59e0b;
+    --text:#f0edf8;--muted:rgba(240,237,248,0.42);
+    --red:#e07070;--green:#7eb8a4;
+    --r:10px;--rl:16px;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;line-height:1.6;min-height:100vh}
+  header{display:flex;align-items:center;justify-content:space-between;padding:18px 40px;border-bottom:1px solid var(--border);position:sticky;top:0;background:rgba(13,10,26,0.96);backdrop-filter:blur(16px);z-index:100}
+  .logo{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;letter-spacing:-.01em}
+  .logo em{color:var(--neon);font-style:normal}
+  .hpill{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:4px 12px;border-radius:20px;background:var(--neon-pale);color:var(--neon);border:1px solid rgba(184,240,0,.28)}
+  .tabs{display:flex;padding:0 40px;border-bottom:1px solid var(--border);background:var(--bg2);position:sticky;top:57px;z-index:90;overflow-x:auto}
+  .tab{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:500;padding:12px 16px;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);transition:all .17s;white-space:nowrap}
+  .tab:hover{color:var(--text)}.tab.active{color:var(--neon);border-bottom-color:var(--neon)}
+  .filters{display:flex;align-items:center;gap:8px;padding:10px 40px;border-bottom:1px solid var(--border);overflow-x:auto;flex-wrap:nowrap;background:rgba(13,10,26,.85)}
+  .fl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-right:2px;white-space:nowrap;flex-shrink:0}
+  .fb{background:var(--surface);border:1px solid var(--border);color:var(--muted);font-family:'Inter',sans-serif;font-size:12px;font-weight:500;padding:5px 11px;border-radius:20px;cursor:pointer;transition:all .16s;white-space:nowrap;flex-shrink:0}
+  .fb:hover{color:var(--text);border-color:var(--border2)}.fb.active{background:var(--neon-pale);border-color:rgba(184,240,0,.38);color:var(--neon)}
+  select.fb{appearance:none;padding-right:24px;background-image:url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2210%22 height=%226%22><path d=%22M0 0l5 6 5-6z%22 fill=%22rgba(240,237,248,0.4)%22/></svg>');background-repeat:no-repeat;background-position:right 8px center}
+  .fdiv{width:1px;height:16px;background:var(--border);margin:0 2px;flex-shrink:0}
+  main{padding:24px 40px;max-width:1440px;margin:0 auto}
+  .tp{display:none}.tp.active{display:block}
+  .sh{display:flex;align-items:baseline;gap:10px;margin-bottom:14px;margin-top:28px}
+  .sh:first-child{margin-top:0}
+  .sh h2{font-family:'Space Grotesk',sans-serif;font-size:19px;font-weight:700;letter-spacing:-.01em}
+  .sh-s{font-size:12px;color:var(--muted)}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:11px;margin-bottom:22px}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:16px 18px;position:relative;overflow:hidden;transition:transform .2s}
+  .kpi:hover{transform:translateY(-2px);border-color:var(--border2)}
+  .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--neon),var(--purple));opacity:0;transition:opacity .2s}
+  .kpi:hover::before,.kpi.hi::before{opacity:1}
+  .kpi-l{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:5px}
+  .kpi-v{font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:700;line-height:1;letter-spacing:-.02em;margin-bottom:3px}
+  .kpi.hi .kpi-v{color:var(--neon)}.kpi-s{font-size:11px;color:var(--muted)}
+  .kpi-d{font-size:11px;font-weight:600}.up{color:var(--neon)}.dn{color:var(--red)}
+  .g2{display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:14px}
+  .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px}
+  .g2e{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+  .cc{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:18px;position:relative;overflow:hidden}
+  .cc::after{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(184,240,0,.15),transparent)}
+  .cc-t{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:2px}
+  .cc-h{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;margin-bottom:14px}
+  .post-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-bottom:22px}
+  .pcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:16px;transition:all .2s}
+  .pcard:hover{border-color:var(--border2);transform:translateY(-2px)}
+  .pcard-top{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+  .pcard-type{font-size:9px;font-weight:700;text-transform:uppercase;padding:2px 7px;border-radius:5px}
+  .t-Reel{background:rgba(139,92,246,.2);color:#a78bfa}.t-Carousel{background:rgba(59,130,246,.2);color:#93c5fd}.t-Static{background:rgba(255,255,255,.07);color:var(--muted)}
+  .pcard-date{font-size:11px;color:var(--muted)}
+  .pcard-theme{font-size:10px;padding:2px 7px;border-radius:5px;font-weight:600;border:1px solid transparent}
+  .pcard-desc{font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:10px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .pcard-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}
+  .pcard-stat{text-align:center}
+  .pcard-stat-v{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;line-height:1}
+  .pcard-stat-l{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-top:1px}
+  .pcard-link{font-size:11px;color:var(--neon);text-decoration:none}
+  .tw{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden;margin-bottom:22px}
+  table{width:100%;border-collapse:collapse}
+  thead th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);cursor:pointer;white-space:nowrap;user-select:none;background:var(--bg2)}
+  thead th:hover{color:var(--text)}thead th.sorted{color:var(--neon)}
+  tbody tr{border-bottom:1px solid var(--border);transition:background .12s}
+  tbody tr:last-child{border-bottom:none}tbody tr:hover{background:rgba(184,240,0,.025)}
+  tbody td{padding:9px 12px;font-size:12px;color:var(--text);vertical-align:middle}
+  .td-m{color:var(--muted)}
+  .bar-wrap{width:60px;height:4px;background:rgba(255,255,255,.06);border-radius:3px;display:inline-block;vertical-align:middle;margin-left:6px}
+  .bar-fill{height:100%;border-radius:3px}
+  .empty{text-align:center;padding:40px;color:var(--muted)}
+  @media(max-width:900px){header,.tabs,.filters{padding-left:16px;padding-right:16px}main{padding:16px}.g2,.g3,.g2e{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+  .au{animation:fadeUp .3s ease both}
+  .au:nth-child(1){animation-delay:.03s}.au:nth-child(2){animation-delay:.06s}.au:nth-child(3){animation-delay:.09s}.au:nth-child(4){animation-delay:.12s}.au:nth-child(5){animation-delay:.15s}.au:nth-child(6){animation-delay:.18s}
+  ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:rgba(184,240,0,.12);border-radius:3px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">B&amp;S <em>Organic Social</em></div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <span style="font-size:12px;color:var(--muted)">Jul 2025 – <strong style="color:var(--text)">Jun 2026</strong></span>
+    <span class="hpill" id="hdr-pill">Loading…</span>
+  </div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" data-tab="overview">Overview</div>
+  <div class="tab" data-tab="trends">Trends</div>
+  <div class="tab" data-tab="themes">Themes</div>
+  <div class="tab" data-tab="posts">All Posts</div>
+  <div class="tab" data-tab="compare">Before &amp; After</div>
+</div>
+
+<div class="filters">
+  <span class="fl">Period</span>
+  <button class="fb active" data-period="all">All time</button>
+  <button class="fb" data-period="90">Last 90 days</button>
+  <button class="fb" data-period="30">Last 30 days</button>
+  <div class="fdiv"></div>
+  <span class="fl">Type</span>
+  <button class="fb active" data-type="all">All</button>
+  <button class="fb" data-type="Reel">Reels</button>
+  <button class="fb" data-type="Carousel">Carousels</button>
+  <button class="fb" data-type="Static">Static</button>
+  <div class="fdiv"></div>
+  <span class="fl">Theme</span>
+  <select class="fb" id="theme-select" onchange="setTheme(this.value)"><option value="all">All themes</option></select>
+</div>
+
+<main>
+
+<!-- OVERVIEW -->
+<div class="tp active" id="tab-overview">
+  <div class="kpis" id="kpis-ov"></div>
+  <div class="g2">
+    <div class="cc"><div class="cc-t">Views by post type over time</div><div class="cc-h">Monthly Views</div><div style="height:210px"><canvas id="ch-views-time"></canvas></div></div>
+    <div class="cc"><div class="cc-t">Content mix</div><div class="cc-h">Post Types</div><div style="height:210px"><canvas id="ch-type-donut"></canvas></div></div>
+  </div>
+  <div class="g3">
+    <div class="cc"><div class="cc-t">Avg engagement per post by type</div><div class="cc-h">Engagement by Type</div><div style="height:175px"><canvas id="ch-eng-type"></canvas></div></div>
+    <div class="cc"><div class="cc-t">Monthly reach</div><div class="cc-h">Reach Trend</div><div style="height:175px"><canvas id="ch-reach-time"></canvas></div></div>
+    <div class="cc"><div class="cc-t">Monthly follows gained</div><div class="cc-h">Follows from Posts</div><div style="height:175px"><canvas id="ch-follows-time"></canvas></div></div>
+  </div>
+  <div class="sh"><h2>Top 6 Posts</h2><span class="sh-s">By views</span></div>
+  <div class="post-grid" id="top-posts"></div>
+</div>
+
+<!-- TRENDS -->
+<div class="tp" id="tab-trends">
+  <div class="kpis" id="kpis-trends"></div>
+  <div class="g2e">
+    <div class="cc"><div class="cc-t">Weekly views</div><div class="cc-h">Views Over Time</div><div style="height:200px"><canvas id="ch-weekly-views"></canvas></div></div>
+    <div class="cc"><div class="cc-t">Weekly engagement breakdown</div><div class="cc-h">Likes · Comments · Saves</div><div style="height:200px"><canvas id="ch-weekly-eng"></canvas></div></div>
+  </div>
+  <div class="g2e">
+    <div class="cc"><div class="cc-t">Monthly engagement rate</div><div class="cc-h">Engagement Rate % (eng/reach)</div><div style="height:200px"><canvas id="ch-eng-rate"></canvas></div></div>
+    <div class="cc"><div class="cc-t">Saves vs shares monthly</div><div class="cc-h">Saves &amp; Shares</div><div style="height:200px"><canvas id="ch-saves-shares"></canvas></div></div>
+  </div>
+  <div class="g2e">
+    <div class="cc"><div class="cc-t">Posts per week</div><div class="cc-h">Posting Frequency</div><div style="height:175px"><canvas id="ch-frequency"></canvas></div></div>
+    <div class="cc"><div class="cc-t">Weekly follows gained</div><div class="cc-h">Follows Over Time</div><div style="height:175px"><canvas id="ch-follows-weekly"></canvas></div></div>
+  </div>
+</div>
+
+<!-- THEMES -->
+<div class="tp" id="tab-themes">
+  <div class="kpis" id="kpis-themes"></div>
+  <div class="g2e">
+    <div class="cc"><div class="cc-t">Total views by theme</div><div class="cc-h">Views by Theme</div><div style="height:240px"><canvas id="ch-theme-views"></canvas></div></div>
+    <div class="cc"><div class="cc-t">Average engagement per post</div><div class="cc-h">Engagement by Theme</div><div style="height:240px"><canvas id="ch-theme-eng"></canvas></div></div>
+  </div>
+  <div id="theme-breakdown"></div>
+</div>
+
+<!-- ALL POSTS -->
+<div class="tp" id="tab-posts">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+    <span style="font-size:13px;color:var(--muted)" id="posts-count"></span>
+    <div style="display:flex;gap:6px">
+      <button class="fb active" id="view-cards" onclick="setPostView('cards')">Cards</button>
+      <button class="fb" id="view-table" onclick="setPostView('table')">Table</button>
+    </div>
+  </div>
+  <div id="posts-cards-view"></div>
+  <div id="posts-table-view" style="display:none">
+    <div class="tw"><table id="posts-table">
+      <thead><tr>
+        <th data-sort="date" class="sorted">Date ↓</th><th>Type</th><th>Theme</th>
+        <th data-sort="views">Views</th><th data-sort="reach">Reach</th>
+        <th data-sort="likes">Likes</th><th data-sort="comments">Comments</th>
+        <th data-sort="saves">Saves</th><th data-sort="shares">Shares</th>
+        <th data-sort="follows">Follows</th><th data-sort="engagement">Eng</th><th>Link</th>
+      </tr></thead>
+      <tbody id="posts-tbody"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- COMPARE -->
+<div class="tp" id="tab-compare">
+  <div class="sh" style="margin-top:0"><h2>Before &amp; After</h2><span class="sh-s">Compare any two periods side by side</span></div>
+  <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;align-items:flex-end">
+    <div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px">Period A (Before)</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input type="date" id="cmp-a-from" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:8px;font-family:Inter,sans-serif;font-size:12px;outline:none">
+        <span style="color:var(--muted);font-size:12px">to</span>
+        <input type="date" id="cmp-a-to" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:8px;font-family:Inter,sans-serif;font-size:12px;outline:none">
+      </div>
+    </div>
+    <div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px">Period B (After)</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input type="date" id="cmp-b-from" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:8px;font-family:Inter,sans-serif;font-size:12px;outline:none">
+        <span style="color:var(--muted);font-size:12px">to</span>
+        <input type="date" id="cmp-b-to" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:8px;font-family:Inter,sans-serif;font-size:12px;outline:none">
+      </div>
+    </div>
+    <button class="fb active" onclick="runCompare()" style="height:32px;padding:0 16px">Compare →</button>
+  </div>
+  <div id="compare-results"></div>
+</div>
+
+</main>
+
+<script>
+// ── DATA & STATE ──
+let D=[], charts={};
+let state={period:'all',type:'all',theme:'all',activeTab:'overview'};
+let postSort={col:'date',dir:-1};
+
+const TC={Reel:'#a78bfa',Carousel:'#93c5fd',Static:'#6b7280'};
+const THEMES={
+  'Sofas':'#c9a84c','Dining':'#8b5cf6','Ercol':'#06b6d4','Seasonal Looks':'#ec4899',
+  'Garden & Outdoor':'#7eb8a4','Bedroom':'#a78bfa','Armchairs':'#f59e0b','Storage':'#10b981',
+  'Promotions & Sales':'#f97316','Christmas':'#e07070','Behind the Scenes':'#6366f1',
+  'Brand Collaborations':'#14b8a6','Style & Trends':'#93c5fd','Customer Features':'#fcd34d',
+  '80th Anniversary':'#b8f000','General':'#6b7280',
+};
+const TX={color:'rgba(240,237,248,0.35)',font:{family:'Inter',size:11}};
+const GR={color:'rgba(255,255,255,0.04)'};
+const LG={labels:{color:'rgba(240,237,248,0.45)',font:{family:'Inter',size:11},boxWidth:9,boxHeight:9}};
+
+async function loadAll(){
+  try{ D=await fetch('data/owned_social.json').then(r=>r.json()); }catch(e){console.error(e);}
+  buildThemeFilter(); render(); initCompare();
+}
+
+function filtered(){
+  return D.filter(p=>{
+    if(state.period!=='all'){const cut=new Date();cut.setDate(cut.getDate()-+state.period);if(new Date(p.date)<cut)return false;}
+    if(state.type!=='all'&&p.post_type!==state.type)return false;
+    if(state.theme!=='all'&&p.theme!==state.theme)return false;
+    return true;
+  });
+}
+
+function mkKPIs(id,items){
+  document.getElementById(id).innerHTML=items.map(k=>
+    `<div class="kpi au ${k.hi?'hi':''}">
+      <div class="kpi-l">${k.label}</div>
+      <div class="kpi-v">${k.value}</div>
+      ${k.delta!=null?`<div class="kpi-d ${k.delta>=0?'up':'dn'}">${k.delta>=0?'↑':'↓'}${Math.abs(k.delta)}% vs prior</div>`:''}
+      <div class="kpi-s">${k.sub||''}</div>
+    </div>`
+  ).join('');
+}
+
+function dc(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
+function el(id){return document.getElementById(id)?.getContext('2d');}
+
+function byMonth(posts,metric){
+  const m={};posts.forEach(p=>{m[p.month]=(m[p.month]||0)+(metric==='count'?1:p[metric]);});return m;
+}
+function byWeek(posts,metric){
+  const m={};
+  posts.forEach(p=>{
+    const d=new Date(p.date),day=d.getDay(),diff=d.getDate()-day+(day===0?-6:1);
+    const w=new Date(new Date(p.date).setDate(diff)).toISOString().slice(0,10);
+    m[w]=(m[w]||0)+(metric==='count'?1:p[metric]);
+  });return m;
+}
+function sortedMonths(posts){return[...new Set(posts.map(p=>p.month))].sort();}
+function sortedWeeks(posts){
+  const s=new Set();
+  posts.forEach(p=>{const d=new Date(p.date),day=d.getDay(),diff=d.getDate()-day+(day===0?-6:1);s.add(new Date(new Date(p.date).setDate(diff)).toISOString().slice(0,10));});
+  return[...s].sort();
+}
+
+// ── OVERVIEW ──
+function renderOverview(){
+  const posts=filtered();
+  if(!posts.length){document.getElementById('hdr-pill').textContent='No data';return;}
+  const views=posts.reduce((s,p)=>s+p.views,0);
+  const reach=posts.reduce((s,p)=>s+p.reach,0);
+  const eng=posts.reduce((s,p)=>s+p.engagement,0);
+  const follows=posts.reduce((s,p)=>s+p.follows,0);
+  const saves=posts.reduce((s,p)=>s+p.saves,0);
+  const shares=posts.reduce((s,p)=>s+p.shares,0);
+  const comments=posts.reduce((s,p)=>s+p.comments,0);
+  const engRate=reach>0?(eng/reach*100).toFixed(2):0;
+
+  document.getElementById('hdr-pill').textContent=`${posts.length} posts · ${fN(views)} views`;
+
+  // Compare first vs second half for deltas
+  const half=Math.floor(posts.length/2);
+  const sorted=[...posts].sort((a,b)=>a.date.localeCompare(b.date));
+  const v1=sorted.slice(0,half).reduce((s,p)=>s+p.views,0)/half||0;
+  const v2=sorted.slice(half).reduce((s,p)=>s+p.views,0)/(sorted.length-half)||0;
+  const vDelta=v1>0?+((v2-v1)/v1*100).toFixed(0):null;
+
+  mkKPIs('kpis-ov',[
+    {label:'Posts',       value:posts.length,            sub:''},
+    {label:'Total Views', value:fN(views),               sub:'impressions',hi:true,delta:vDelta},
+    {label:'Total Reach', value:fN(reach),               sub:'unique accounts'},
+    {label:'Engagement',  value:fN(eng),                 sub:`avg ${fN((eng/posts.length).toFixed(0))}/post`},
+    {label:'Eng Rate',    value:engRate+'%',              sub:'eng / reach'},
+    {label:'Follows',     value:fN(follows),              sub:'from posts'},
+    {label:'Saves',       value:fN(saves),                sub:''},
+    {label:'Shares',      value:fN(shares),               sub:''},
+  ]);
+
+  // Monthly views stacked by type
+  dc('views-time');
+  const months=sortedMonths(posts);
+  charts['views-time']=new Chart(el('ch-views-time'),{
+    type:'bar',
+    data:{labels:months.map(fMonthShort),
+      datasets:['Reel','Carousel','Static'].map(t=>({
+        label:t,
+        data:months.map(m=>posts.filter(p=>p.month===m&&p.post_type===t).reduce((s,p)=>s+p.views,0)),
+        backgroundColor:TC[t]+'55',borderColor:TC[t],borderWidth:1.5,borderRadius:3,
+      }))
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:LG},
+      scales:{x:{stacked:true,ticks:TX,grid:{display:false}},y:{stacked:true,ticks:{...TX,callback:v=>fN(v)},grid:GR}}
+    }
+  });
+
+  // Type donut
+  dc('type-donut');
+  const tc={};posts.forEach(p=>{tc[p.post_type]=(tc[p.post_type]||0)+1;});
+  charts['type-donut']=new Chart(el('ch-type-donut'),{
+    type:'doughnut',
+    data:{labels:Object.keys(tc),datasets:[{data:Object.values(tc),
+      backgroundColor:Object.keys(tc).map(t=>TC[t]+'bb'),borderColor:Object.keys(tc).map(t=>TC[t]),
+      borderWidth:1.5,hoverOffset:4}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'58%',plugins:{legend:LG,
+      tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${ctx.raw} posts`}}}}
+  });
+
+  // Avg engagement by type
+  dc('eng-type');
+  const te={};posts.forEach(p=>{if(!te[p.post_type])te[p.post_type]={e:0,c:0};te[p.post_type].e+=p.engagement;te[p.post_type].c++;});
+  const types=Object.keys(te);
+  charts['eng-type']=new Chart(el('ch-eng-type'),{
+    type:'bar',
+    data:{labels:types,datasets:[{label:'Avg Engagement',data:types.map(t=>(te[t].e/te[t].c).toFixed(0)),
+      backgroundColor:types.map(t=>TC[t]+'55'),borderColor:types.map(t=>TC[t]),borderWidth:1.5,borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{ticks:TX,grid:{display:false}},y:{ticks:{...TX,callback:v=>fN(v)},grid:GR}}}
+  });
+
+  // Reach trend
+  dc('reach-time');
+  const rm=byMonth(posts,'reach');
+  charts['reach-time']=new Chart(el('ch-reach-time'),{
+    type:'line',
+    data:{labels:months.map(fMonthShort),datasets:[{data:months.map(m=>rm[m]||0),
+      borderColor:'#b8f000',backgroundColor:'rgba(184,240,0,.07)',fill:true,borderWidth:2,pointRadius:2,tension:.4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{ticks:TX,grid:GR},y:{ticks:{...TX,callback:v=>fN(v)},grid:GR}}}
+  });
+
+  // Follows trend
+  dc('follows-time');
+  const fm=byMonth(posts,'follows');
+  charts['follows-time']=new Chart(el('ch-follows-time'),{
+    type:'bar',
+    data:{labels:months.map(fMonthShort),datasets:[{data:months.map(m=>fm[m]||0),
+      backgroundColor:'rgba(139,92,246,.35)',borderColor:'#8b5cf6',borderWidth:1.5,borderRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{ticks:TX,grid:{display:false}},y:{ticks:TX,grid:GR}}}
+  });
+
+  // Top posts
+  document.getElementById('top-posts').innerHTML=[...posts].sort((a,b)=>b.views-a.views).slice(0,6).map(pCard).join('');
+}
+
+// ── TRENDS ──
+function renderTrends(){
+  const posts=filtered();
+  if(!posts.length)return;
+  const sorted=[...posts].sort((a,b)=>a.date.localeCompare(b.date));
+  const half=Math.floor(sorted.length/2);
+  const v1=half?sorted.slice(0,half).reduce((s,p)=>s+p.views,0)/half:0;
+  const v2=(sorted.length-half)?sorted.slice(half).reduce((s,p)=>s+p.views,0)/(sorted.length-half):0;
+  const vD=v1>0?+((v2-v1)/v1*100).toFixed(0):null;
+  const e1=half?sorted.slice(0,half).reduce((s,p)=>s+p.engagement,0)/half:0;
+  const e2=(sorted.length-half)?sorted.slice(half).reduce((s,p)=>s+p.engagement,0)/(sorted.length-half):0;
+  const eD=e1>0?+((e2-e1)/e1*100).toFixed(0):null;
+
+  mkKPIs('kpis-trends',[
+    {label:'Avg Views/Post',  value:fN((posts.reduce((s,p)=>s+p.views,0)/posts.length).toFixed(0)),      sub:'', delta:vD},
+    {label:'Avg Eng/Post',    value:fN((posts.reduce((s,p)=>s+p.engagement,0)/posts.length).toFixed(0)), sub:'', delta:eD},
+    {label:'Best Single Post',value:fN(Math.max(...posts.map(p=>p.views))),                              sub:'views'},
+    {label:'Most Saves',      value:fN(Math.max(...posts.map(p=>p.saves))),                              sub:'single post'},
+  ]);
+
+  const weeks=sortedWeeks(posts);
+  const wv=byWeek(posts,'views');
+  const wl=byWeek(posts,'likes');
+  const wc=byWeek(posts,'comments');
+  const ws=byWeek(posts,'saves');
+  const wf=byWeek(posts,'follows');
+  const wn=byWeek(posts,'count');
+
+  dc('weekly-views');
+  charts['weekly-views']=new Chart(el('ch-weekly-views'),{
+    type:'line',
+    data:{labels:weeks.map(fDateShort),datasets:[{data:weeks.map(w=>wv[w]||0),
+      borderColor:'#b8f000',backgroundColor:'rgba(184,240,0,.07)',fill:true,borderWidth:2,pointRadius:1.5,tension:.4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{ticks:{...TX,maxRotation:40,maxTicksLimit:14},grid:GR},y:{ticks:{...TX,callback:v=>fN(v)},grid:GR}}}
+  });
+
+  dc('weekly-eng');
+  charts['weekly-eng']=new Chart(el('ch-weekly-eng'),{
+    type:'line',
+    data:{labels:weeks.map(fDateShort),
+      datasets:[
+        {label:'Likes',    data:weeks.map(w=>wl[w]||0),borderColor:'#ec4899',backgroundColor:'transparent',borderWidth:1.5,pointRadius:0,tension:.4},
+        {label:'Comments', data:weeks.map(w=>wc[w]||0),borderColor:'#8b5cf6',backgroundColor:'transparent',borderWidth:1.5,pointRadius:0,tension:.4},
+        {label:'Saves',    data:weeks.map(w=>ws[w]||0),borderColor:'#f59e0b',backgroundColor:'transparent',borderWidth:1.5,pointRadius:0,tension:.4},
+      ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:LG},
+      scales:{x:{ticks:{...TX,maxRotation:40,maxTicksLimit:14},grid:GR},y:{ticks:TX,grid:GR}}}
+  });
+
+  const months=sortedMonths(posts);
+  const erMap={};
+  posts.forEach(p=>{if(!erMap[p.month])erMap[p.month]={e:0,r:0};erMap[p.month].e+=p.engagement;erMap[p.month].r+=p.reach;});
+
+  dc('eng-rate');
+  charts['eng-rate']=new Chart(el('ch-eng-rate'),{
+    type:'line',
+    data:{labels:months.map(fMonthShort),datasets:[{label:'Eng Rate %',
+      data:months.map(m=>erMap[m]?.r>0?(erMap[m].e/erMap[m].r*100).toFixed(2):0),
+      borderColor:'#06b6d4',backgroundColor:'rgba(6,182,212,.07)',fill:true,borderWidth:2,pointRadius:3,tension:.4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{ticks:TX,grid:GR},y:{ticks:{...TX,callback:v=>v+'%'},grid:GR}}}
+  });
+
+  const ssMap={};
+  posts.forEach(p=>{if(!ssMap[p.month])ssMap[p.month]={s:0,sh:0};ssMap[p.month].s+=p.saves;ssMap[p.month].sh+=p.shares;});
+
+  dc('saves-shares');
+  charts['saves-shares']=new Chart(el('ch-saves-shares'),{
+    type:'bar',
+    data:{labels:months.map(fMonthShort),
+      datasets:[
+        {label:'Saves', data:months.map(m=>ssMap[m]?.s||0),backgroundColor:'rgba(245,158,11,.4)',borderColor:'#f59e0b',borderWidth:1.5,borderRadius:3},
+        {label:'Shares',data:months.map(m=>ssMap[m]?.sh||0),backgroundColor:'rgba(139,92,246,.4)',borderColor:'#8b5cf6',borderWidth:1.5,borderRadius:3},
+      ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:LG},
+      scales:{x:{ticks:TX,grid:{display:false}},y:{ticks:TX,grid:GR}}}
+  });
+
+  dc('frequency');
+  charts['frequency']=new Chart(el('ch-frequency'),{
+    type:'bar',
+    data:{labels:weeks.map(fDateShort),datasets:[{data:weeks.map(w=>wn[w]||0),
+      backgroundColor:'rgba(184,240,0,.25)',borderColor:'#b8f000',borderWidth:1.5,borderRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{ticks:{...TX,maxRotation:40,maxTicksLimit:16},grid:{display:false}},y:{ticks:{...TX,stepSize:1},grid:GR}}}
+  });
+
+  dc('follows-weekly');
+  charts['follows-weekly']=new Chart(el('ch-follows-weekly'),{
+    type:'line',
+    data:{labels:weeks.map(fDateShort),datasets:[{data:weeks.map(w=>wf[w]||0),
+      borderColor:'#8b5cf6',backgroundColor:'rgba(139,92,246,.07)',fill:true,borderWidth:2,pointRadius:1.5,tension:.4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{ticks:{...TX,maxRotation:40,maxTicksLimit:16},grid:GR},y:{ticks:TX,grid:GR}}}
+  });
+}
+
+// ── THEMES ──
+function renderThemes(){
+  const posts=filtered();
+  const tm={};
+  posts.forEach(p=>{
+    if(!tm[p.theme])tm[p.theme]={views:0,reach:0,engagement:0,saves:0,follows:0,count:0,posts:[]};
+    tm[p.theme].views+=p.views;tm[p.theme].reach+=p.reach;tm[p.theme].engagement+=p.engagement;
+    tm[p.theme].saves+=p.saves;tm[p.theme].follows+=p.follows;tm[p.theme].count++;tm[p.theme].posts.push(p);
+  });
+
+  const themes=Object.entries(tm).sort((a,b)=>b[1].views-a[1].views);
+  const topView=themes[0];
+  const topEng=[...themes].sort((a,b)=>(b[1].engagement/b[1].count)-(a[1].engagement/a[1].count))[0];
+
+  mkKPIs('kpis-themes',[
+    {label:'Themes',      value:themes.length,           sub:''},
+    {label:'Top by Views',value:topView?topView[0]:'—',  sub:topView?`${fN(topView[1].views)} views`:'',hi:true},
+    {label:'Top by Eng',  value:topEng?topEng[0]:'—',    sub:topEng?`${fN((topEng[1].engagement/topEng[1].count).toFixed(0))} avg`:''},
+    {label:'Most Active', value:[...themes].sort((a,b)=>b[1].count-a[1].count)[0]?.[0]||'—', sub:'most posts'},
+  ]);
+
+  dc('theme-views');
+  charts['theme-views']=new Chart(el('ch-theme-views'),{
+    type:'bar',
+    data:{labels:themes.map(([t])=>t),datasets:[{data:themes.map(([,v])=>v.views),indexAxis:'y',
+      backgroundColor:themes.map(([t])=>(THEMES[t]||'#888')+'55'),borderColor:themes.map(([t])=>THEMES[t]||'#888'),
+      borderWidth:1.5,borderRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},
+      scales:{x:{ticks:{...TX,callback:v=>fN(v)},grid:GR},y:{ticks:{...TX,font:{size:10}},grid:{display:false}}}}
+  });
+
+  const engSorted=[...themes].sort((a,b)=>(b[1].engagement/b[1].count)-(a[1].engagement/a[1].count));
+  dc('theme-eng');
+  charts['theme-eng']=new Chart(el('ch-theme-eng'),{
+    type:'bar',
+    data:{labels:engSorted.map(([t])=>t),datasets:[{data:engSorted.map(([,v])=>(v.engagement/v.count).toFixed(0)),indexAxis:'y',
+      backgroundColor:engSorted.map(([t])=>(THEMES[t]||'#888')+'55'),borderColor:engSorted.map(([t])=>THEMES[t]||'#888'),
+      borderWidth:1.5,borderRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},
+      scales:{x:{ticks:TX,grid:GR},y:{ticks:{...TX,font:{size:10}},grid:{display:false}}}}
+  });
+
+  // Per-theme sections
+  document.getElementById('theme-breakdown').innerHTML=themes.map(([theme,data])=>{
+    const col=THEMES[theme]||'#888';
+    const avgEng=(data.engagement/data.count).toFixed(0);
+    return `<div style="margin-bottom:8px">
+      <div class="sh" style="margin-top:24px;margin-bottom:10px">
+        <div style="width:10px;height:10px;border-radius:50%;background:${col};flex-shrink:0;margin-top:4px"></div>
+        <h2>${theme}</h2>
+        <span class="sh-s">${data.count} posts · ${fN(data.views)} views · ${fN(data.reach)} reach · avg ${fN(avgEng)} eng</span>
+      </div>
+      <div class="post-grid">${[...data.posts].sort((a,b)=>b.views-a.views).slice(0,4).map(pCard).join('')}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── POSTS ──
+function renderPosts(){
+  const posts=filtered();
+  const sorted=[...posts].sort((a,b)=>{
+    const av=a[postSort.col]??0,bv=b[postSort.col]??0;
+    return typeof av==='string'?postSort.dir*av.localeCompare(bv):postSort.dir*(av-bv);
+  });
+  document.getElementById('posts-count').textContent=`${sorted.length} posts`;
+  document.getElementById('posts-cards-view').innerHTML=sorted.length
+    ?`<div class="post-grid">${sorted.map(pCard).join('')}</div>`
+    :`<div class="empty">No posts match filters</div>`;
+  const maxV=Math.max(1,...sorted.map(p=>p.views));
+  document.getElementById('posts-tbody').innerHTML=sorted.map(p=>`
+    <tr>
+      <td class="td-m">${fDate(p.date)}</td>
+      <td><span style="font-size:9px;font-weight:700;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:${TC[p.post_type]+'33'};color:${TC[p.post_type]}">${p.post_type}</span></td>
+      <td><span style="font-size:10px;padding:2px 7px;border-radius:5px;background:${(THEMES[p.theme]||'#888')+'22'};color:${THEMES[p.theme]||'#888'}">${p.theme}</span></td>
+      <td>${fN(p.views)}<span class="bar-wrap"><span class="bar-fill" style="width:${(p.views/maxV*100).toFixed(0)}%;background:#a78bfa"></span></span></td>
+      <td>${fN(p.reach)}</td><td>${fN(p.likes)}</td><td>${fN(p.comments)}</td>
+      <td>${fN(p.saves)}</td><td>${fN(p.shares)}</td><td>${fN(p.follows)}</td>
+      <td>${fN(p.engagement)}</td>
+      <td>${p.permalink?`<a href="${p.permalink}" target="_blank" style="color:var(--neon);font-size:11px;text-decoration:none">↗</a>`:'—'}</td>
+    </tr>`).join('');
+}
+
+// ── POST CARD ──
+function pCard(p){
+  const col=THEMES[p.theme]||'#888';
+  return `<div class="pcard au">
+    <div class="pcard-top">
+      <span class="pcard-type t-${p.post_type}">${p.post_type}</span>
+      <span class="pcard-date">${fDate(p.date)}</span>
+      <span class="pcard-theme" style="background:${col}22;color:${col};border-color:${col}44">${p.theme}</span>
+    </div>
+    <div class="pcard-desc">${p.description||'—'}</div>
+    <div class="pcard-stats">
+      <div class="pcard-stat"><div class="pcard-stat-v" style="color:#a78bfa">${fN(p.views)}</div><div class="pcard-stat-l">Views</div></div>
+      <div class="pcard-stat"><div class="pcard-stat-v" style="color:#ec4899">${fN(p.likes)}</div><div class="pcard-stat-l">Likes</div></div>
+      <div class="pcard-stat"><div class="pcard-stat-v" style="color:#f59e0b">${fN(p.saves)}</div><div class="pcard-stat-l">Saves</div></div>
+      <div class="pcard-stat"><div class="pcard-stat-v" style="color:#b8f000">${fN(p.follows)}</div><div class="pcard-stat-l">Follows</div></div>
+    </div>
+    ${p.permalink?`<a class="pcard-link" href="${p.permalink}" target="_blank">View post ↗</a>`:''}
+  </div>`;
+}
+
+// ── COMPARE ──
+function initCompare(){
+  const dates=D.map(p=>p.date).sort();
+  if(!dates.length)return;
+  const mid=dates[Math.floor(dates.length/2)];
+  document.getElementById('cmp-a-from').value=dates[0];
+  document.getElementById('cmp-a-to').value=mid;
+  document.getElementById('cmp-b-from').value=mid;
+  document.getElementById('cmp-b-to').value=dates[dates.length-1];
+}
+
+function runCompare(){
+  const aF=document.getElementById('cmp-a-from').value,aT=document.getElementById('cmp-a-to').value;
+  const bF=document.getElementById('cmp-b-from').value,bT=document.getElementById('cmp-b-to').value;
+  const pA=D.filter(p=>p.date>=aF&&p.date<=aT);
+  const pB=D.filter(p=>p.date>=bF&&p.date<=bT);
+  function agg(ps){return{n:ps.length,views:ps.reduce((s,p)=>s+p.views,0),reach:ps.reduce((s,p)=>s+p.reach,0),likes:ps.reduce((s,p)=>s+p.likes,0),comments:ps.reduce((s,p)=>s+p.comments,0),saves:ps.reduce((s,p)=>s+p.saves,0),shares:ps.reduce((s,p)=>s+p.shares,0),follows:ps.reduce((s,p)=>s+p.follows,0),eng:ps.reduce((s,p)=>s+p.engagement,0)};}
+  const A=agg(pA),B=agg(pB);
+  function chg(a,b){if(!a)return'—';const p=((b-a)/a*100).toFixed(0);const cl=+p>=0?'up':'dn';return `<span class="${cl}">${+p>=0?'↑':'↓'}${Math.abs(p)}%</span>`;}
+  const rows=[
+    {l:'Posts',a:A.n,b:B.n,f:v=>v},{l:'Views',a:A.views,b:B.views,f:fN},{l:'Reach',a:A.reach,b:B.reach,f:fN},
+    {l:'Likes',a:A.likes,b:B.likes,f:fN},{l:'Comments',a:A.comments,b:B.comments,f:fN},
+    {l:'Saves',a:A.saves,b:B.saves,f:fN},{l:'Shares',a:A.shares,b:B.shares,f:fN},
+    {l:'Follows',a:A.follows,b:B.follows,f:fN},{l:'Total Engagement',a:A.eng,b:B.eng,f:fN},
+    {l:'Avg Views/Post',a:A.n?A.views/A.n:0,b:B.n?B.views/B.n:0,f:v=>fN(v.toFixed(0))},
+    {l:'Avg Eng/Post',a:A.n?A.eng/A.n:0,b:B.n?B.eng/B.n:0,f:v=>fN(v.toFixed(0))},
+    {l:'Avg Reach/Post',a:A.n?A.reach/A.n:0,b:B.n?B.reach/B.n:0,f:v=>fN(v.toFixed(0))},
+  ];
+
+  // Theme comparison
+  const allThemes=[...new Set(D.map(p=>p.theme))];
+  const themeRows=allThemes.map(t=>{
+    const tA=pA.filter(p=>p.theme===t),tB=pB.filter(p=>p.theme===t);
+    const vA=tA.reduce((s,p)=>s+p.views,0),vB=tB.reduce((s,p)=>s+p.views,0);
+    return{t,nA:tA.length,nB:tB.length,vA,vB};
+  }).filter(r=>r.vA||r.vB).sort((a,b)=>(b.vA+b.vB)-(a.vA+a.vB));
+
+  document.getElementById('compare-results').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px;border-radius:var(--rl);overflow:hidden;margin-bottom:18px">
+      <div style="background:var(--surface);padding:14px 18px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:4px">Period A · Before</div>
+        <div style="font-size:13px;font-weight:600">${fDate(aF)} – ${fDate(aT)}</div>
+        <div style="font-size:12px;color:var(--muted)">${pA.length} posts</div>
+      </div>
+      <div style="background:var(--surface2);padding:14px 18px;border-left:2px solid var(--neon)">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:4px">Period B · After</div>
+        <div style="font-size:13px;font-weight:600">${fDate(bF)} – ${fDate(bT)}</div>
+        <div style="font-size:12px;color:var(--muted)">${pB.length} posts</div>
+      </div>
+    </div>
+    <div class="g2e">
+      <div class="tw"><table>
+        <thead><tr><th>Metric</th><th>Period A</th><th>Period B</th><th>Change</th></tr></thead>
+        <tbody>${rows.map(r=>`<tr><td><strong>${r.l}</strong></td><td>${r.f(r.a)}</td><td>${r.f(r.b)}</td><td>${chg(r.a,r.b)}</td></tr>`).join('')}</tbody>
+      </table></div>
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:10px">Views by Theme</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          ${themeRows.map(r=>{
+            const col=THEMES[r.t]||'#888';
+            const pct=r.vA>0?((r.vB-r.vA)/r.vA*100).toFixed(0):null;
+            const dir=pct&&+pct>=0?'up':'dn';
+            return`<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px 14px;display:flex;align-items:center;gap:10px">
+              <div style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></div>
+              <span style="font-size:12px;font-weight:600;flex:1">${r.t}</span>
+              <span style="font-size:11px;color:var(--muted)">${fN(r.vA)} → ${fN(r.vB)}</span>
+              ${pct?`<span class="${dir}" style="font-size:11px;font-weight:600">${+pct>=0?'↑':'↓'}${Math.abs(pct)}%</span>`:''}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── INTERACTIONS ──
+document.querySelectorAll('.fb[data-period]').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.fb[data-period]').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');state.period=b.dataset.period;render();
+}));
+document.querySelectorAll('.fb[data-type]').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.fb[data-type]').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');state.type=b.dataset.type;render();
+}));
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.tp').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');state.activeTab=t.dataset.tab;
+  document.getElementById('tab-'+state.activeTab).classList.add('active');render();
+}));
+document.getElementById('posts-table').querySelectorAll('thead th[data-sort]').forEach(th=>th.addEventListener('click',()=>{
+  document.getElementById('posts-table').querySelectorAll('thead th').forEach(x=>x.classList.remove('sorted'));
+  th.classList.add('sorted');
+  if(postSort.col===th.dataset.sort)postSort.dir*=-1;else{postSort.col=th.dataset.sort;postSort.dir=-1;}
+  renderPosts();
+}));
+
+function setTheme(v){state.theme=v;render();}
+function setPostView(v){
+  document.getElementById('view-cards').classList.toggle('active',v==='cards');
+  document.getElementById('view-table').classList.toggle('active',v==='table');
+  document.getElementById('posts-cards-view').style.display=v==='cards'?'':'none';
+  document.getElementById('posts-table-view').style.display=v==='table'?'':'none';
+}
+function buildThemeFilter(){
+  const themes=[...new Set(D.map(p=>p.theme))].sort();
+  const sel=document.getElementById('theme-select');
+  sel.innerHTML='<option value="all">All themes</option>'+themes.map(t=>`<option value="${t}">${t}</option>`).join('');
+}
+
+// ── RENDER ──
+function render(){
+  const t=state.activeTab;
+  if(t==='overview')renderOverview();
+  if(t==='trends')  renderTrends();
+  if(t==='themes')  renderThemes();
+  if(t==='posts')   renderPosts();
+}
+
+// ── FORMATTERS ──
+function fN(n){n=+n;if(!n)return'0';if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return Math.round(n).toString();}
+function fDate(d){return new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});}
+function fDateShort(d){return new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short'});}
+function fMonthShort(m){return new Date(m+'-01').toLocaleDateString('en-GB',{month:'short',year:'2-digit'});}
+
+loadAll();
+</script>
+</body>
+</html>
