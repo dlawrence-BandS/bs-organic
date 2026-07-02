@@ -116,7 +116,7 @@ stories_data = {"updated_at": datetime.now().isoformat()+"Z", "stories": []}
 result = get(f"{BASE}/{IG_ID}/stories", {"fields": "id,timestamp,media_type,media_url,thumbnail_url"})
 if result and result.get("data"):
     for story in result["data"]:
-        ins = get(f"{BASE}/{story['id']}/insights", {"metric": "impressions,reach,exits,taps_forward,taps_back"})
+        ins = get(f"{BASE}/{story['id']}/insights", {"metric": "views,reach,replies"})
         metrics = {}
         if ins and ins.get("data"):
             for m in ins["data"]:
@@ -132,15 +132,19 @@ save("ig_stories.json", stories_data)
 print("\n[4/5] Audience demographics...")
 audience_data = {"updated_at": datetime.now().isoformat()+"Z"}
 
-# v25 demographic breakdowns via insights
+# v25 demographics: metric=follower_demographics, ONE breakdown per call,
+# period=lifetime + timeframe + metric_type=total_value all required
 demo_calls = [
+    ("audience_age",     "follower_demographics", {"breakdown": "age"}),
+    ("audience_gender",  "follower_demographics", {"breakdown": "gender"}),
+    ("audience_city",    "follower_demographics", {"breakdown": "city"}),
+    ("audience_country", "follower_demographics", {"breakdown": "country"}),
+    # best-effort combined (some versions accept multi-breakdown; harmless if it 400s)
     ("audience_gender_age", "follower_demographics", {"breakdown": "age,gender"}),
-    ("audience_city",       "follower_demographics", {"breakdown": "city"}),
-    ("audience_country",    "follower_demographics", {"breakdown": "country"}),
 ]
 
 for key, metric, extra in demo_calls:
-    params = {"metric": metric, "period": "lifetime", "metric_type": "total_value", **extra}
+    params = {"metric": metric, "period": "lifetime", "timeframe": "this_month", "metric_type": "total_value", **extra}
     result = get(f"{BASE}/{IG_ID}/insights", params)
     if result and result.get("data"):
         d = result["data"][0]
@@ -246,180 +250,3 @@ print(f"\n  Updated {updated}/{len(posts)} posts with fresh metrics")
 save("owned_social.json", posts)
 
 print(f"\n✓ Done! Files saved to data/")
-
-BASE    = "https://graph.facebook.com/v25.0"
-DATA    = Path("data")
-
-def get(url, params=None):
-    p = params or {}
-    p["access_token"] = TOKEN
-    r = requests.get(url, params=p, timeout=15)
-    if r.status_code != 200:
-        print(f"  ✗ {r.status_code}: {r.text[:200]}")
-        return None
-    return r.json()
-
-def save(filename, data):
-    path = DATA / filename
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-    print(f"  ✓ Saved {path}")
-
-# ── 1. ACCOUNT BASICS ──────────────────────────────────────────
-print("\n[1/5] Account basics...")
-account = get(f"{BASE}/{IG_ID}", {"fields": "id,username,name,biography,followers_count,follows_count,media_count,profile_picture_url,website"})
-if account:
-    save("ig_account.json", account)
-    print(f"  Username: @{account.get('username')} | Followers: {account.get('followers_count'):,}")
-
-# ── 2. ACCOUNT INSIGHTS (last 90 days) ─────────────────────────
-print("\n[2/5] Account insights (last 90 days)...")
-since = int((datetime.now() - timedelta(days=90)).timestamp())
-until = int(datetime.now().timestamp())
-
-insights_data = {"updated_at": datetime.utcnow().isoformat()+"Z", "metrics": {}}
-
-# Daily metrics
-daily_metrics = ["impressions", "reach", "profile_views", "website_clicks", "email_contacts", "get_directions_clicks", "phone_call_clicks", "text_message_clicks"]
-for metric in daily_metrics:
-    result = get(f"{BASE}/{IG_ID}/insights", {
-        "metric": metric,
-        "period": "day",
-        "since": since,
-        "until": until,
-    })
-    if result and result.get("data"):
-        values = result["data"][0].get("values", [])
-        insights_data["metrics"][metric] = values
-        total = sum(v.get("value", 0) for v in values)
-        print(f"  {metric}: {total:,} (90 days)")
-    time.sleep(0.2)
-
-# Follower count over time
-follower_result = get(f"{BASE}/{IG_ID}/insights", {
-    "metric": "follower_count",
-    "period": "day",
-    "since": since,
-    "until": until,
-})
-if follower_result and follower_result.get("data"):
-    insights_data["metrics"]["follower_count"] = follower_result["data"][0].get("values", [])
-    print(f"  follower_count: {len(insights_data['metrics']['follower_count'])} daily data points")
-
-save("ig_insights.json", insights_data)
-
-# ── 3. STORIES ──────────────────────────────────────────────────
-print("\n[3/5] Stories...")
-stories_data = {"updated_at": datetime.utcnow().isoformat()+"Z", "stories": []}
-result = get(f"{BASE}/{IG_ID}/stories", {
-    "fields": "id,timestamp,media_type,media_url,thumbnail_url"
-})
-if result and result.get("data"):
-    for story in result["data"]:
-        # Get insights for each story
-        story_insights = get(f"{BASE}/{story['id']}/insights", {
-            "metric": "impressions,reach,replies,exits,taps_forward,taps_back"
-        })
-        metrics = {}
-        if story_insights and story_insights.get("data"):
-            for m in story_insights["data"]:
-                metrics[m["name"]] = m.get("values", [{}])[0].get("value", 0) if m.get("values") else m.get("value", 0)
-        stories_data["stories"].append({**story, "insights": metrics})
-        time.sleep(0.15)
-    print(f"  Found {len(stories_data['stories'])} active stories")
-else:
-    print("  No active stories (stories expire after 24hrs)")
-save("ig_stories.json", stories_data)
-
-# ── 4. AUDIENCE DEMOGRAPHICS ────────────────────────────────────
-print("\n[4/5] Audience demographics...")
-audience_data = {"updated_at": datetime.utcnow().isoformat()+"Z"}
-
-demo_metrics = [
-    "audience_city",
-    "audience_country",
-    "audience_gender_age",
-    "audience_locale",
-]
-for metric in demo_metrics:
-    result = get(f"{BASE}/{IG_ID}/insights", {
-        "metric": metric,
-        "period": "lifetime",
-    })
-    if result and result.get("data"):
-        values = result["data"][0].get("values", [{}])
-        audience_data[metric] = values[0].get("value", {}) if values else {}
-        print(f"  {metric}: {len(audience_data[metric])} entries")
-    else:
-        audience_data[metric] = {}
-    time.sleep(0.2)
-
-save("ig_audience.json", audience_data)
-
-# ── 5. UPDATE POST METRICS (fresh from API) ─────────────────────
-print("\n[5/5] Refreshing post metrics from API...")
-posts = json.load(open(DATA / "owned_social.json", encoding="utf-8"))
-
-# Get all media with fresh metrics
-all_media = []
-url = f"{BASE}/{IG_ID}/media"
-params = {
-    "fields": "id,permalink,like_count,comments_count,timestamp,media_type,insights.metric(impressions,reach,saved,shares,video_views,plays)",
-    "limit": 50
-}
-page = 1
-while url:
-    print(f"  Fetching media page {page}...", end=" ")
-    p = dict(params); p["access_token"] = TOKEN
-    r = requests.get(url, params=p if page==1 else {"access_token": TOKEN}, timeout=15)
-    data = r.json()
-    items = data.get("data", [])
-    all_media.extend(items)
-    print(f"{len(items)} items")
-    url = data.get("paging", {}).get("next")
-    page += 1
-    time.sleep(0.25)
-
-# Build permalink → metrics map
-metrics_map = {}
-for item in all_media:
-    pl = item.get("permalink","").rstrip("/")+"/"
-    ins = item.get("insights", {}).get("data", [])
-    m = {i["name"]: i.get("values",[{}])[0].get("value",0) if i.get("values") else i.get("value",0) for i in ins}
-    metrics_map[pl] = {
-        "likes":     item.get("like_count", 0),
-        "comments":  item.get("comments_count", 0),
-        "impressions": m.get("impressions", m.get("plays", 0)),
-        "reach":     m.get("reach", 0),
-        "saves":     m.get("saved", 0),
-        "shares":    m.get("shares", 0),
-        "video_views": m.get("video_views", m.get("plays", 0)),
-    }
-
-# Update posts with fresh API metrics
-updated = 0
-for post in posts:
-    pl = post.get("permalink","").rstrip("/")+"/"
-    if pl in metrics_map:
-        m = metrics_map[pl]
-        # Only update if API has non-zero data (fresher than CSV)
-        if m["impressions"] > 0:
-            post["views"]    = m["impressions"]
-            post["reach"]    = m["reach"]
-            post["likes"]    = m["likes"]
-            post["comments"] = m["comments"]
-            post["saves"]    = m["saves"]
-            post["shares"]   = m["shares"]
-            post["engagement"] = m["likes"] + m["comments"] + m["saves"] + m["shares"]
-            post["api_refreshed"] = datetime.utcnow().isoformat()+"Z"
-            updated += 1
-
-print(f"  Updated {updated} / {len(posts)} posts with fresh metrics")
-save("owned_social.json", posts)
-
-print(f"\n✓ All done! Files saved to data/")
-print("  ig_account.json    — account basics & follower count")
-print("  ig_insights.json   — daily reach, impressions, profile views (90 days)")
-print("  ig_audience.json   — demographics (age, gender, city, country)")
-print("  ig_stories.json    — active stories")
-print("  owned_social.json  — updated with fresh post metrics")
