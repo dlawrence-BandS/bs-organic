@@ -171,8 +171,8 @@
   <div class="kpis" id="kpis-audience"></div>
 
   <div class="g2e">
-    <div class="cc"><div class="cc-t">Follower growth</div><div class="cc-h">Daily Followers (Last 90 Days)</div><div style="height:200px"><canvas id="ch-followers"></canvas></div></div>
-    <div class="cc"><div class="cc-t">Daily reach & impressions</div><div class="cc-h">Account Reach vs Impressions</div><div style="height:200px"><canvas id="ch-reach-imp"></canvas></div></div>
+    <div class="cc"><div class="cc-t">Follower growth</div><div class="cc-h">New Followers Per Day (Last 30 Days)</div><div style="height:200px"><canvas id="ch-followers"></canvas></div></div>
+    <div class="cc"><div class="cc-t">Daily reach</div><div class="cc-h">Account Reach (Last 30 Days)</div><div style="height:200px"><canvas id="ch-reach-imp"></canvas></div></div>
   </div>
 
   <div class="g3">
@@ -777,24 +777,26 @@ function renderAudience(){
   if (!hasData) { mkKPIs('kpis-audience',[{label:'Status',value:'No data',sub:'Run fetch_ig_insights.py'}]); return; }
 
   const m = IGInsights.metrics||{};
+  const sumM = x => Array.isArray(x) ? x.reduce((s,v)=>s+(v.value||0),0) : (x&&typeof x==='object' ? (x.value||0) : (+x||0));
   const followers   = IGAccount.followers_count||0;
   const mediaCount  = IGAccount.media_count||0;
-  const totalReach  = (m.reach||[]).reduce((s,v)=>s+(v.value||0),0);
-  const totalImp    = (m.impressions||[]).reduce((s,v)=>s+(v.value||0),0);
-  const totalPV     = (m.profile_views||[]).reduce((s,v)=>s+(v.value||0),0);
-  const totalWC     = (m.website_clicks||[]).reduce((s,v)=>s+(v.value||0),0);
+  const totalReach  = sumM(m.reach);
+  const totalEng    = sumM(m.accounts_engaged);
+  const totalPV     = sumM(m.profile_views);
+  const totalWC     = sumM(m.website_clicks);
+  const totalInt    = sumM(m.total_interactions);
 
-  // Follower change
-  const fc = m.follower_count||[];
-  const fcDelta = fc.length>=2 ? fc[fc.length-1].value - fc[0].value : null;
+  // Follower gain (daily new-follower counts summed)
+  const fc = Array.isArray(m.follower_count) ? m.follower_count : [];
+  const fcGain = fc.reduce((s,v)=>s+(v.value||0),0);
 
   mkKPIs('kpis-audience',[
-    {label:'Followers',      value:fN(followers),   sub: fcDelta!=null?(fcDelta>=0?`+${fN(fcDelta)}`:`${fN(fcDelta)}`) + ' last 90d':'', hi:true},
+    {label:'Followers',      value:fN(followers),   sub: fcGain?`+${fN(fcGain)} last 30d`:'', hi:true},
     {label:'Total Posts',    value:fN(mediaCount),  sub:'all time'},
-    {label:'Reach (90d)',    value:fN(totalReach),  sub:'unique accounts'},
-    {label:'Impressions (90d)', value:fN(totalImp), sub:''},
-    {label:'Profile Views (90d)', value:fN(totalPV), sub:''},
-    {label:'Website Clicks (90d)', value:fN(totalWC), sub:''},
+    {label:'Reach (30d)',    value:fN(totalReach),  sub:'unique accounts'},
+    {label:'Engaged (30d)',  value:fN(totalEng),    sub:'accounts engaged'},
+    {label:'Profile Views (30d)', value:fN(totalPV), sub:''},
+    {label:'Website Clicks (30d)', value:fN(totalWC), sub:''},
   ]);
 
   // Follower growth chart
@@ -811,38 +813,41 @@ function renderAudience(){
     });
   }
 
-  // Reach vs Impressions
+  // Daily reach
   dc('reach-imp');
-  const reach = m.reach||[], imp = m.impressions||[];
+  const reach = Array.isArray(m.reach)?m.reach:[];
   const labels = reach.map(v=>fDateShort(v.end_time||v.period));
   charts['reach-imp']=new Chart(el('ch-reach-imp'),{
     type:'line',
     data:{labels,datasets:[
-      {label:'Reach',       data:reach.map(v=>v.value||0),borderColor:'#b8f000',backgroundColor:'transparent',borderWidth:2,pointRadius:0,tension:.4},
-      {label:'Impressions', data:imp.map(v=>v.value||0),  borderColor:'#8b5cf6',backgroundColor:'transparent',borderWidth:2,pointRadius:0,tension:.4},
+      {label:'Reach', data:reach.map(v=>v.value||0),borderColor:'#b8f000',backgroundColor:'rgba(184,240,0,.07)',fill:true,borderWidth:2,pointRadius:0,tension:.4},
     ]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:LG},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
       scales:{x:{ticks:{...TX,maxRotation:40,maxTicksLimit:12},grid:GR},y:{ticks:{...TX,callback:v=>fN(v)},grid:GR}}}
   });
 
-  // Profile views + website clicks
+  // Discovery metrics (API returns 30d totals only for these)
   dc('profile-visits');
-  const pv=m.profile_views||[], wc=m.website_clicks||[];
   charts['profile-visits']=new Chart(el('ch-profile-visits'),{
     type:'bar',
-    data:{labels:pv.map(v=>fDateShort(v.end_time||v.period)),datasets:[
-      {label:'Profile Views', data:pv.map(v=>v.value||0),backgroundColor:'rgba(6,182,212,.35)',borderColor:'#06b6d4',borderWidth:1.5,borderRadius:2},
-      {label:'Website Clicks',data:wc.map(v=>v.value||0),backgroundColor:'rgba(184,240,0,.25)',borderColor:'#b8f000',borderWidth:1.5,borderRadius:2},
+    data:{labels:['Profile Views','Website Clicks','Accounts Engaged','Interactions'],datasets:[
+      {data:[totalPV,totalWC,totalEng,totalInt],
+       backgroundColor:['rgba(6,182,212,.35)','rgba(184,240,0,.25)','rgba(139,92,246,.35)','rgba(236,72,153,.3)'],
+       borderColor:['#06b6d4','#b8f000','#8b5cf6','#ec4899'],borderWidth:1.5,borderRadius:3},
     ]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:LG},
-      scales:{x:{ticks:{...TX,maxRotation:40,maxTicksLimit:12},grid:{display:false}},y:{ticks:TX,grid:GR}}}
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},
+      scales:{x:{ticks:{...TX,callback:v=>fN(v)},grid:GR},y:{ticks:TX,grid:{display:false}}}}
   });
 
   // Gender
   dc('gender');
-  const ga = IGAudience.audience_gender_age||{};
-  const genders = {M:0,F:0,U:0};
-  Object.entries(ga).forEach(([k,v])=>{ const g=k.split('.')[0]; if(genders[g]!==undefined) genders[g]+=v; });
+  const gRaw = IGAudience.audience_gender||{};
+  const genders = {M:gRaw.M||0, F:gRaw.F||0, U:gRaw.U||0};
+  if(!genders.M && !genders.F && !genders.U){
+    Object.entries(IGAudience.audience_gender_age||{}).forEach(([k,v])=>{
+      const g=(k.split(' ')[1]||k.split('.')[0]); if(genders[g]!==undefined) genders[g]+=v;
+    });
+  }
   charts['gender']=new Chart(el('ch-gender'),{
     type:'doughnut',
     data:{labels:['Male','Female','Other'],
@@ -856,8 +861,12 @@ function renderAudience(){
 
   // Age
   dc('age');
-  const ageBuckets={};
-  Object.entries(ga).forEach(([k,v])=>{ const age=k.split('.')[1]; if(age) ageBuckets[age]=(ageBuckets[age]||0)+v; });
+  let ageBuckets = {...(IGAudience.audience_age||{})};
+  if(!Object.keys(ageBuckets).length){
+    Object.entries(IGAudience.audience_gender_age||{}).forEach(([k,v])=>{
+      const age=(k.split(' ')[0]||k.split('.')[1]); if(age) ageBuckets[age]=(ageBuckets[age]||0)+v;
+    });
+  }
   const ages=Object.entries(ageBuckets).sort((a,b)=>a[0].localeCompare(b[0]));
   charts['age']=new Chart(el('ch-age'),{
     type:'bar',
