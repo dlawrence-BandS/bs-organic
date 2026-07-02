@@ -57,6 +57,8 @@
   .pcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden;transition:all .2s}
   .pcard:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.3)}
   .pcard-thumb{position:relative;width:100%;aspect-ratio:4/3;overflow:hidden;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:center}
+  .pcard-thumb-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .3s}
+  .pcard-thumb:hover .pcard-thumb-img{transform:scale(1.04)}
   .pcard-thumb-pattern{position:absolute;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,.04) 1px,transparent 1px);background-size:20px 20px;pointer-events:none}
   .pcard-thumb-content{position:relative;z-index:1;text-align:center;padding:16px;width:100%}
   .pcard-thumb-icon{font-size:28px;margin-bottom:6px;display:block;opacity:.7}
@@ -571,21 +573,41 @@ function renderPosts(){
 function pCard(p){
   const col = THEMES[p.theme]||'#888';
   const tc  = TC[p.post_type]||'#888';
+  const typeIcon = p.post_type==='Reel' ? '▶' : p.post_type==='Carousel' ? '⊞' : '□';
 
-  // Styled placeholder thumbnail
-  const typeIcon  = p.post_type==='Reel' ? '▶' : p.post_type==='Carousel' ? '⊞' : '□';
-  const typeLabel = p.post_type;
+  const thumbArea = p.thumbnail_url
+    ? `<div class="pcard-thumb" style="background:#111">
+        <img src="${p.thumbnail_url}" class="pcard-thumb-img" loading="lazy"
+          onerror="this.parentElement.innerHTML=this.parentElement.innerHTML.replace(this.outerHTML,'')">
+        ${p.permalink?`<a href="${p.permalink}" target="_blank" class="pcard-thumb-open" title="Open on Instagram">↗</a>`:''}
+      </div>`
+    : `<div class="pcard-thumb" style="background:linear-gradient(135deg,${col}18,${tc}22)">
+        <div class="pcard-thumb-pattern"></div>
+        <div class="pcard-thumb-content">
+          <div class="pcard-thumb-icon" style="color:${tc}">${typeIcon}</div>
+          <div class="pcard-thumb-type" style="color:${tc}">${p.post_type}</div>
+          <div class="pcard-thumb-desc">${(p.description||'').split('\n')[0].substring(0,60)}${(p.description||'').length>60?'…':''}</div>
+        </div>
+        ${p.permalink?`<a href="${p.permalink}" target="_blank" class="pcard-thumb-open" title="Open on Instagram">↗</a>`:''}
+      </div>`;
 
-  const thumbArea = `
-    <div class="pcard-thumb" style="background:linear-gradient(135deg,${col}18,${tc}22)">
-      <div class="pcard-thumb-pattern"></div>
-      <div class="pcard-thumb-content">
-        <div class="pcard-thumb-icon" style="color:${tc}">${typeIcon}</div>
-        <div class="pcard-thumb-type" style="color:${tc}">${typeLabel}</div>
-        <div class="pcard-thumb-desc">${(p.description||'').split('\n')[0].substring(0,60)}${p.description&&p.description.length>60?'…':''}</div>
+  return `<div class="pcard au">
+    ${thumbArea}
+    <div class="pcard-body">
+      <div class="pcard-top">
+        <span class="pcard-type t-${p.post_type}">${p.post_type}</span>
+        <span class="pcard-date">${fDate(p.date)}</span>
+        <span class="pcard-theme" style="background:${col}22;color:${col};border-color:${col}44">${p.theme}</span>
       </div>
-      ${p.permalink?`<a href="${p.permalink}" target="_blank" class="pcard-thumb-open" title="Open on Instagram">↗</a>`:''}
-    </div>`;
+      <div class="pcard-stats">
+        <div class="pcard-stat"><div class="pcard-stat-v" style="color:#a78bfa">${fN(p.views)}</div><div class="pcard-stat-l">Views</div></div>
+        <div class="pcard-stat"><div class="pcard-stat-v" style="color:#ec4899">${fN(p.likes)}</div><div class="pcard-stat-l">Likes</div></div>
+        <div class="pcard-stat"><div class="pcard-stat-v" style="color:#f59e0b">${fN(p.saves)}</div><div class="pcard-stat-l">Saves</div></div>
+        <div class="pcard-stat"><div class="pcard-stat-v" style="color:#b8f000">${fN(p.follows)}</div><div class="pcard-stat-l">Follows</div></div>
+      </div>
+    </div>
+  </div>`;
+}
 
   return `<div class="pcard au">
     ${thumbArea}
