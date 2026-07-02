@@ -609,29 +609,6 @@ function pCard(p){
   </div>`;
 }
 
-  return `<div class="pcard au">
-    ${thumbArea}
-    <div class="pcard-body">
-      <div class="pcard-top">
-        <span class="pcard-type t-${p.post_type}">${p.post_type}</span>
-        <span class="pcard-date">${fDate(p.date)}</span>
-        <span class="pcard-theme" style="background:${col}22;color:${col};border-color:${col}44">${p.theme}</span>
-      </div>
-      <div class="pcard-stats">
-        <div class="pcard-stat"><div class="pcard-stat-v" style="color:#a78bfa">${fN(p.views)}</div><div class="pcard-stat-l">Views</div></div>
-        <div class="pcard-stat"><div class="pcard-stat-v" style="color:#ec4899">${fN(p.likes)}</div><div class="pcard-stat-l">Likes</div></div>
-        <div class="pcard-stat"><div class="pcard-stat-v" style="color:#f59e0b">${fN(p.saves)}</div><div class="pcard-stat-l">Saves</div></div>
-        <div class="pcard-stat"><div class="pcard-stat-v" style="color:#b8f000">${fN(p.follows)}</div><div class="pcard-stat-l">Follows</div></div>
-      </div>
-    </div>
-  </div>`;
-}
-
-function getShortcode(permalink) {
-  const m = permalink.match(/\/(reel|p)\/([A-Za-z0-9_-]+)/);
-  return m ? m[2] : '';
-}
-
 // ── COMPARE ──
 function initCompare(){
   const dates=D.map(p=>p.date).sort();
