@@ -109,6 +109,7 @@
 <div class="tabs">
   <div class="tab active" data-tab="overview">Overview</div>
   <div class="tab" data-tab="trends">Trends</div>
+  <div class="tab" data-tab="audience">Audience</div>
   <div class="tab" data-tab="themes">Themes</div>
   <div class="tab" data-tab="posts">All Posts</div>
   <div class="tab" data-tab="compare">Before &amp; After</div>
@@ -162,6 +163,40 @@
   <div class="g2e">
     <div class="cc"><div class="cc-t">Posts per week</div><div class="cc-h">Posting Frequency</div><div style="height:175px"><canvas id="ch-frequency"></canvas></div></div>
     <div class="cc"><div class="cc-t">Weekly follows gained</div><div class="cc-h">Follows Over Time</div><div style="height:175px"><canvas id="ch-follows-weekly"></canvas></div></div>
+  </div>
+</div>
+
+<!-- AUDIENCE -->
+<div class="tp" id="tab-audience">
+  <div class="kpis" id="kpis-audience"></div>
+
+  <div class="g2e">
+    <div class="cc"><div class="cc-t">Follower growth</div><div class="cc-h">Daily Followers (Last 90 Days)</div><div style="height:200px"><canvas id="ch-followers"></canvas></div></div>
+    <div class="cc"><div class="cc-t">Daily reach & impressions</div><div class="cc-h">Account Reach vs Impressions</div><div style="height:200px"><canvas id="ch-reach-imp"></canvas></div></div>
+  </div>
+
+  <div class="g3">
+    <div class="cc"><div class="cc-t">Profile visits & website clicks</div><div class="cc-h">Discovery Metrics</div><div style="height:175px"><canvas id="ch-profile-visits"></canvas></div></div>
+    <div class="cc"><div class="cc-t">Gender split</div><div class="cc-h">Audience Gender</div><div style="height:175px"><canvas id="ch-gender"></canvas></div></div>
+    <div class="cc"><div class="cc-t">Age breakdown</div><div class="cc-h">Audience Age</div><div style="height:175px"><canvas id="ch-age"></canvas></div></div>
+  </div>
+
+  <div class="g2e">
+    <div class="cc">
+      <div class="cc-t">Top cities</div><div class="cc-h">Audience by City</div>
+      <div id="aud-cities" style="margin-top:4px"></div>
+    </div>
+    <div class="cc">
+      <div class="cc-t">Top countries</div><div class="cc-h">Audience by Country</div>
+      <div id="aud-countries" style="margin-top:4px"></div>
+    </div>
+  </div>
+
+  <div id="aud-no-data" style="display:none">
+    <div class="empty">
+      <span class="empty-icon">📊</span>
+      Run <code style="background:rgba(255,255,255,.07);padding:2px 6px;border-radius:4px">python scripts/fetch_ig_insights.py</code> to populate audience data
+    </div>
   </div>
 </div>
 
@@ -229,6 +264,7 @@
 <script>
 // ── DATA & STATE ──
 let D=[], charts={};
+let IGAccount={}, IGInsights={}, IGAudience={}, IGStories=[];
 let state={period:'all',type:'all',theme:'all',activeTab:'overview'};
 let postSort={col:'date',dir:-1};
 
@@ -246,6 +282,10 @@ const LG={labels:{color:'rgba(240,237,248,0.45)',font:{family:'Inter',size:11},b
 
 async function loadAll(){
   try{ D=await fetch('data/owned_social.json').then(r=>r.json()); }catch(e){console.error(e);}
+  try{ IGAccount=await fetch('data/ig_account.json').then(r=>r.json()); }catch(e){}
+  try{ IGInsights=await fetch('data/ig_insights.json').then(r=>r.json()); }catch(e){}
+  try{ IGAudience=await fetch('data/ig_audience.json').then(r=>r.json()); }catch(e){}
+  try{ const s=await fetch('data/ig_stories.json').then(r=>r.json()); IGStories=s.stories||[]; }catch(e){}
   buildThemeFilter(); render(); initCompare();
 }
 
@@ -303,7 +343,9 @@ function renderOverview(){
   const comments=posts.reduce((s,p)=>s+p.comments,0);
   const engRate=reach>0?(eng/reach*100).toFixed(2):0;
 
-  document.getElementById('hdr-pill').textContent=`${posts.length} posts · ${fN(views)} views`;
+  document.getElementById('hdr-pill').textContent = IGAccount.followers_count
+    ? `${fN(IGAccount.followers_count)} followers · ${posts.length} posts`
+    : `${posts.length} posts · ${fN(views)} views`;
 
   // Compare first vs second half for deltas
   const half=Math.floor(posts.length/2);
@@ -721,10 +763,134 @@ function buildThemeFilter(){
 // ── RENDER ──
 function render(){
   const t=state.activeTab;
-  if(t==='overview')renderOverview();
-  if(t==='trends')  renderTrends();
-  if(t==='themes')  renderThemes();
-  if(t==='posts')   renderPosts();
+  if(t==='overview') renderOverview();
+  if(t==='trends')   renderTrends();
+  if(t==='audience') renderAudience();
+  if(t==='themes')   renderThemes();
+  if(t==='posts')    renderPosts();
+}
+
+// ── AUDIENCE ──
+function renderAudience(){
+  const hasData = IGInsights && Object.keys(IGInsights.metrics||{}).length > 0;
+  document.getElementById('aud-no-data').style.display = hasData ? 'none' : '';
+  if (!hasData) { mkKPIs('kpis-audience',[{label:'Status',value:'No data',sub:'Run fetch_ig_insights.py'}]); return; }
+
+  const m = IGInsights.metrics||{};
+  const followers   = IGAccount.followers_count||0;
+  const mediaCount  = IGAccount.media_count||0;
+  const totalReach  = (m.reach||[]).reduce((s,v)=>s+(v.value||0),0);
+  const totalImp    = (m.impressions||[]).reduce((s,v)=>s+(v.value||0),0);
+  const totalPV     = (m.profile_views||[]).reduce((s,v)=>s+(v.value||0),0);
+  const totalWC     = (m.website_clicks||[]).reduce((s,v)=>s+(v.value||0),0);
+
+  // Follower change
+  const fc = m.follower_count||[];
+  const fcDelta = fc.length>=2 ? fc[fc.length-1].value - fc[0].value : null;
+
+  mkKPIs('kpis-audience',[
+    {label:'Followers',      value:fN(followers),   sub: fcDelta!=null?(fcDelta>=0?`+${fN(fcDelta)}`:`${fN(fcDelta)}`) + ' last 90d':'', hi:true},
+    {label:'Total Posts',    value:fN(mediaCount),  sub:'all time'},
+    {label:'Reach (90d)',    value:fN(totalReach),  sub:'unique accounts'},
+    {label:'Impressions (90d)', value:fN(totalImp), sub:''},
+    {label:'Profile Views (90d)', value:fN(totalPV), sub:''},
+    {label:'Website Clicks (90d)', value:fN(totalWC), sub:''},
+  ]);
+
+  // Follower growth chart
+  dc('followers');
+  if (fc.length) {
+    charts['followers']=new Chart(el('ch-followers'),{
+      type:'line',
+      data:{labels:fc.map(v=>fDateShort(v.end_time||v.period)),
+        datasets:[{data:fc.map(v=>v.value||0),
+          borderColor:'#b8f000',backgroundColor:'rgba(184,240,0,.07)',
+          fill:true,borderWidth:2,pointRadius:1.5,tension:.4}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+        scales:{x:{ticks:{...TX,maxRotation:40,maxTicksLimit:12},grid:GR},y:{ticks:{...TX,callback:v=>fN(v)},grid:GR}}}
+    });
+  }
+
+  // Reach vs Impressions
+  dc('reach-imp');
+  const reach = m.reach||[], imp = m.impressions||[];
+  const labels = reach.map(v=>fDateShort(v.end_time||v.period));
+  charts['reach-imp']=new Chart(el('ch-reach-imp'),{
+    type:'line',
+    data:{labels,datasets:[
+      {label:'Reach',       data:reach.map(v=>v.value||0),borderColor:'#b8f000',backgroundColor:'transparent',borderWidth:2,pointRadius:0,tension:.4},
+      {label:'Impressions', data:imp.map(v=>v.value||0),  borderColor:'#8b5cf6',backgroundColor:'transparent',borderWidth:2,pointRadius:0,tension:.4},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:LG},
+      scales:{x:{ticks:{...TX,maxRotation:40,maxTicksLimit:12},grid:GR},y:{ticks:{...TX,callback:v=>fN(v)},grid:GR}}}
+  });
+
+  // Profile views + website clicks
+  dc('profile-visits');
+  const pv=m.profile_views||[], wc=m.website_clicks||[];
+  charts['profile-visits']=new Chart(el('ch-profile-visits'),{
+    type:'bar',
+    data:{labels:pv.map(v=>fDateShort(v.end_time||v.period)),datasets:[
+      {label:'Profile Views', data:pv.map(v=>v.value||0),backgroundColor:'rgba(6,182,212,.35)',borderColor:'#06b6d4',borderWidth:1.5,borderRadius:2},
+      {label:'Website Clicks',data:wc.map(v=>v.value||0),backgroundColor:'rgba(184,240,0,.25)',borderColor:'#b8f000',borderWidth:1.5,borderRadius:2},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:LG},
+      scales:{x:{ticks:{...TX,maxRotation:40,maxTicksLimit:12},grid:{display:false}},y:{ticks:TX,grid:GR}}}
+  });
+
+  // Gender
+  dc('gender');
+  const ga = IGAudience.audience_gender_age||{};
+  const genders = {M:0,F:0,U:0};
+  Object.entries(ga).forEach(([k,v])=>{ const g=k.split('.')[0]; if(genders[g]!==undefined) genders[g]+=v; });
+  charts['gender']=new Chart(el('ch-gender'),{
+    type:'doughnut',
+    data:{labels:['Male','Female','Other'],
+      datasets:[{data:[genders.M,genders.F,genders.U],
+        backgroundColor:['rgba(6,182,212,.7)','rgba(236,72,153,.7)','rgba(107,114,128,.7)'],
+        borderColor:['#06b6d4','#ec4899','#6b7280'],borderWidth:1.5,hoverOffset:4}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:LG,
+      tooltip:{callbacks:{label:ctx=>{const t=Object.values(genders).reduce((s,v)=>s+v,0);return ` ${ctx.label}: ${ctx.raw.toLocaleString()} (${t>0?(ctx.raw/t*100).toFixed(1):'0'}%)`;}}}}
+    }
+  });
+
+  // Age
+  dc('age');
+  const ageBuckets={};
+  Object.entries(ga).forEach(([k,v])=>{ const age=k.split('.')[1]; if(age) ageBuckets[age]=(ageBuckets[age]||0)+v; });
+  const ages=Object.entries(ageBuckets).sort((a,b)=>a[0].localeCompare(b[0]));
+  charts['age']=new Chart(el('ch-age'),{
+    type:'bar',
+    data:{labels:ages.map(([a])=>a),
+      datasets:[{data:ages.map(([,v])=>v),
+        backgroundColor:'rgba(139,92,246,.45)',borderColor:'#8b5cf6',borderWidth:1.5,borderRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{ticks:TX,grid:{display:false}},y:{ticks:{...TX,callback:v=>fN(v)},grid:GR}}}
+  });
+
+  // Cities
+  const cities=Object.entries(IGAudience.audience_city||{}).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const maxC=cities[0]?.[1]||1;
+  document.getElementById('aud-cities').innerHTML=cities.map(([city,val])=>`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <span style="font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${city}</span>
+      <div style="width:120px;height:5px;background:rgba(255,255,255,.06);border-radius:3px;flex-shrink:0">
+        <div style="width:${(val/maxC*100).toFixed(0)}%;height:100%;background:#06b6d4;border-radius:3px"></div>
+      </div>
+      <span style="font-size:11px;color:var(--muted);width:40px;text-align:right;flex-shrink:0">${fN(val)}</span>
+    </div>`).join('') || '<div style="color:var(--muted);font-size:12px">No city data</div>';
+
+  // Countries
+  const countries=Object.entries(IGAudience.audience_country||{}).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const maxCo=countries[0]?.[1]||1;
+  document.getElementById('aud-countries').innerHTML=countries.map(([country,val])=>`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <span style="font-size:12px;flex:1">${country}</span>
+      <div style="width:120px;height:5px;background:rgba(255,255,255,.06);border-radius:3px;flex-shrink:0">
+        <div style="width:${(val/maxCo*100).toFixed(0)}%;height:100%;background:#b8f000;border-radius:3px"></div>
+      </div>
+      <span style="font-size:11px;color:var(--muted);width:40px;text-align:right;flex-shrink:0">${fN(val)}</span>
+    </div>`).join('') || '<div style="color:var(--muted);font-size:12px">No country data</div>';
 }
 
 // ── FORMATTERS ──
