@@ -23,6 +23,14 @@ BOOSTED POSTS (added Nov 2026):
   out. A post counts as boosted if Instagram lists an ad for it, or if its
   link is in data/boosted.txt (for any Instagram misses).
 
+ORGANIC vs BOOST NUMBERS (added Nov 2026):
+  Instagram's own figures are organic only, so the main post numbers come
+  from Instagram. (The older numbers from the Business Suite export included
+  ad results on boosted posts; those are kept aside as views_with_ads /
+  follows_with_ads.) The boost's paid results come from Meta Ads, using the
+  token in meta_ads.token (never uploaded: .gitignore blocks *.token files).
+  Without that file the refresh still runs; cards just show organic only.
+
 Usage:
   python scripts/fetch_ig_insights.py
 
@@ -70,9 +78,9 @@ TOKEN = TOKEN_FILE.read_text(encoding="utf-8-sig", errors="ignore").strip().stri
 print(f"Token loaded ({len(TOKEN)} chars)")
 
 
-def get(url, params=None, retries=3, quiet=False):
+def get(url, params=None, retries=3, quiet=False, token=None):
     p = dict(params or {})
-    p["access_token"] = TOKEN
+    p["access_token"] = token or TOKEN
     for attempt in range(retries):
         try:
             r = requests.get(url, params=p, timeout=20)
@@ -112,14 +120,14 @@ def metric_value(entry):
 
 
 # ── 1. ACCOUNT BASICS (doubles as the token check) ──
-print("\n[1/5] Checking the token...")
+print("\n[1/6] Checking the token...")
 account = get(f"{BASE}/{IG_ID}", {"fields": "id,username,name,biography,followers_count,follows_count,media_count,profile_picture_url,website"})
 if not account or not account.get("id"):
     stop("your Instagram token has expired or is wrong.")
 print(f"  ✓ Token works: @{account.get('username')} | {account.get('followers_count',0):,} followers")
 
 # ── 2. ACCOUNT INSIGHTS (max 30 days per call) ──
-print("\n[2/5] Account insights (last 30 days)...")
+print("\n[2/6] Account insights (last 30 days)...")
 since = int((datetime.now() - timedelta(days=29)).timestamp())
 until = int(datetime.now().timestamp())
 
@@ -178,7 +186,7 @@ save("ig_account.json", account)
 save("ig_insights.json", insights_data)
 
 # ── 3. STORIES ──
-print("\n[3/5] Stories...")
+print("\n[3/6] Stories...")
 result = get(f"{BASE}/{IG_ID}/stories", {"fields": "id,timestamp,media_type,media_url,thumbnail_url"})
 if result is None:
     print("  Couldn't fetch stories - keeping the existing file")
@@ -200,7 +208,7 @@ else:
     save("ig_stories.json", stories_data)
 
 # ── 4. AUDIENCE DEMOGRAPHICS ──
-print("\n[4/5] Audience demographics...")
+print("\n[4/6] Audience demographics...")
 old_audience = load_existing("ig_audience.json", {})
 audience_data = {"updated_at": datetime.now().isoformat()+"Z"}
 
@@ -242,7 +250,7 @@ if not_updated:
 save("ig_audience.json", audience_data)
 
 # ── 5. UPDATE POST METRICS (only for posts in owned_social.json) ──
-print("\n[5/5] Refreshing metrics for dashboard posts...")
+print("\n[5/6] Refreshing metrics for dashboard posts...")
 posts = json.load(open(DATA / "owned_social.json", encoding="utf-8"))
 
 
@@ -371,11 +379,23 @@ for i, post in enumerate(posts):
         post["saves"]      = m.get("saved", 0)
         post["shares"]     = m.get("shares", 0)
         post["engagement"] = m.get("total_interactions", 0) or post["likes"]+post["comments"]+post["saves"]+post["shares"]
-        # Views and follows only ever go up, so never swap in a lower number
+        # Instagram's own figures are organic only. The older numbers from the
+        # Business Suite export included ad results on boosted posts, so those
+        # are kept aside as *_with_ads and the organic figure is shown instead.
         if m.get("views"):
-            post["views"] = max(post.get("views") or 0, m["views"])
-        if m.get("follows"):
-            post["follows"] = max(post.get("follows") or 0, m["follows"])
+            if post.get("boosted") and (post.get("views") or 0) > m["views"] and "views_with_ads" not in post:
+                post["views_with_ads"] = post["views"]
+            post["views"] = m["views"]
+        if "follows" in m:
+            if post.get("boosted") and (post.get("follows") or 0) > m["follows"] and "follows_with_ads" not in post:
+                post["follows_with_ads"] = post["follows"]
+            post["follows"] = m["follows"]
+        elif post.get("boosted") and post.get("follows") and "views_with_ads" in post and "follows_with_ads" not in post:
+            # Reels get no follows figure from Instagram, and on posts whose old
+            # numbers included the ads, the organic figure is unknown until the
+            # boost's follows can be taken off it (step 6)
+            post["follows_with_ads"] = post["follows"]
+            post["follows"] = None
         post["api_refreshed"] = datetime.now().isoformat()+"Z"
         updated += 1
         print(f"  {i+1}/{len(posts)}: {label} ✓")
@@ -384,11 +404,86 @@ for i, post in enumerate(posts):
     time.sleep(0.2)
 
 print(f"\n  Updated {updated}/{len(posts)} posts with fresh metrics")
-if updated or flags_changed:
-    save("owned_social.json", posts)
 if not updated:
     print("  Post numbers didn't update (nothing came back)")
     WARNINGS.append("Post numbers didn't update")
+
+# ── 6. BOOST RESULTS (the paid side, from Meta Ads) ──
+print("\n[6/6] Boost results from Meta Ads...")
+ADS_TOKEN_FILE = Path("meta_ads.token")
+CURRENCY = {"GBP": "£", "EUR": "€", "USD": "$"}
+to_check = [p for p in posts if p.get("boosted") and p.get("boost_ads")]
+ads_token = None
+if ADS_TOKEN_FILE.exists():
+    ads_token = ADS_TOKEN_FILE.read_text(encoding="utf-8-sig", errors="ignore").strip().strip("\"'").strip()
+
+
+def ad_results(ad_id, token):
+    res = get(f"{BASE}/{ad_id}/insights",
+              {"fields": "impressions,reach,spend,actions,account_currency", "date_preset": "maximum"},
+              quiet=True, token=token)
+    if res is None:
+        return None
+    out = {"views": 0, "reach": 0, "likes": 0, "saves": 0, "follows": None, "spend": 0.0, "currency": ""}
+    for row in res.get("data", []):
+        out["views"] += int(float(row.get("impressions") or 0))   # paid impressions = paid views
+        out["reach"] += int(float(row.get("reach") or 0))
+        out["spend"] += float(row.get("spend") or 0)
+        out["currency"] = row.get("account_currency") or out["currency"]
+        for a in row.get("actions") or []:
+            kind, val = a.get("action_type", ""), int(float(a.get("value") or 0))
+            if kind == "post_reaction":
+                out["likes"] += val
+            elif kind == "onsite_conversion.post_save":
+                out["saves"] += val
+            elif "follow" in kind:
+                out["follows"] = (out["follows"] or 0) + val
+    return out
+
+
+boost_changed = False
+if not to_check:
+    print("  No boosted posts to look up")
+else:
+    # Use the Meta Ads token if there is one; otherwise see if the Instagram token can read ads
+    token = ads_token
+    if not token and ad_results(to_check[0]["boost_ads"][0], TOKEN) is not None:
+        token = TOKEN
+    if not token:
+        print("  Skipped: add the Meta Ads token as meta_ads.token to load boost results")
+        WARNINGS.append("Boost results not loaded (no meta_ads.token file)")
+    else:
+        done, missing = 0, 0
+        for post in to_check:
+            parts = [ad_results(ad_id, token) for ad_id in post["boost_ads"]]
+            time.sleep(0.2)
+            if any(r is None for r in parts):
+                missing += 1      # keep any earlier boost results rather than half a set
+                continue
+            follows = [r["follows"] for r in parts if r["follows"] is not None]
+            boost = {
+                "views":    sum(r["views"] for r in parts),
+                "reach":    sum(r["reach"] for r in parts),
+                "likes":    sum(r["likes"] for r in parts),
+                "saves":    sum(r["saves"] for r in parts),
+                "follows":  sum(follows) if follows else None,
+                "spend":    round(sum(r["spend"] for r in parts), 2),
+                "currency": next((CURRENCY.get(r["currency"], r["currency"] + " ") for r in parts if r["currency"]), "£"),
+                "updated":  datetime.now().isoformat()+"Z",
+            }
+            post["boost"] = boost
+            # Organic follows for older boosted reels = the old total minus the boost's follows
+            if post.get("follows") is None and post.get("follows_with_ads") is not None and boost["follows"] is not None:
+                post["follows"] = max(0, post["follows_with_ads"] - boost["follows"])
+            done += 1
+            boost_changed = True
+        print(f"  Boost results for {done}/{len(to_check)} boosted posts")
+        if missing:
+            print("  Some couldn't be read: the Meta Ads token may have expired, or not cover that ad account")
+            WARNINGS.append(f"Boost results missing for {missing} posts")
+
+if updated or flags_changed or boost_changed:
+    save("owned_social.json", posts)
 
 if WARNINGS:
     print("\nHeads up (the rest updated fine, these kept their previous figures):")
