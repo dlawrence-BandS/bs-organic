@@ -73,6 +73,10 @@
   .pcard-date{font-size:11px;color:var(--muted)}
   .pcard-theme{font-size:10px;padding:2px 7px;border-radius:5px;font-weight:600;border:1px solid transparent}
   .boost-tag{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:5px;background:#f59e0b22;color:#f59e0b;border:1px solid #f59e0b44;white-space:nowrap}
+  .pcard-row-l{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 6px}
+  .pcard-row-l.boost{color:#f59e0b;margin:10px 0 6px;padding-top:9px;border-top:1px dashed #f59e0b44}
+  .pcard-row-l span{font-weight:500;text-transform:none;letter-spacing:0;margin-left:4px;color:var(--muted)}
+  .pcard-stats.boost .pcard-stat-v{color:#f59e0b;font-size:14px}
   .pcard-desc{font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:10px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
   .pcard-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}
   .pcard-stat{text-align:center}
@@ -639,11 +643,22 @@ function renderPosts(){
       <td><span style="font-size:10px;padding:2px 7px;border-radius:5px;background:${(THEMES[p.theme]||'#888')+'22'};color:${THEMES[p.theme]||'#888'}">${p.theme}</span></td>
       <td>${fN(p.views)}<span class="bar-wrap"><span class="bar-fill" style="width:${(p.views/maxV*100).toFixed(0)}%;background:#a78bfa"></span></span></td>
       <td>${fN(p.reach)}</td><td>${fN(p.likes)}</td><td>${fN(p.comments)}</td>
-      <td>${fN(p.saves)}</td><td>${fN(p.shares)}</td><td>${fN(p.follows)}</td>
+      <td>${fN(p.saves)}</td><td>${fN(p.shares)}</td><td>${p.follows==null?'—':fN(p.follows)}</td>
       <td>${fN(p.engagement)}</td>
       <td>${p.permalink?`<a href="${p.permalink}" target="_blank" style="color:var(--neon);font-size:11px;text-decoration:none">↗</a>`:'—'}</td>
     </tr>`).join('');
 }
+
+// What the boost added on top of the organic numbers (from Meta Ads)
+function boostRow(p){
+  const b=p.boost;
+  if(!b) return '<div class="pcard-row-l boost">Boost <span>results not loaded yet</span></div>';
+  const plus=v=>v==null?'—':'+'+fN(v);
+  const stat=(v,l)=>`<div class="pcard-stat"><div class="pcard-stat-v">${plus(v)}</div><div class="pcard-stat-l">${l}</div></div>`;
+  return `<div class="pcard-row-l boost">Boost <span>${b.currency||'£'}${fMoney(b.spend)} spent</span></div>
+      <div class="pcard-stats boost">${stat(b.views,'Views')}${stat(b.likes,'Likes')}${stat(b.saves,'Saves')}${stat(b.follows,'Follows')}</div>`;
+}
+function fMoney(v){v=+v||0;return v>=1000?(v/1000).toFixed(1)+'K':Math.round(v).toString();}
 
 function pCard(p){
   const col = THEMES[p.theme]||'#888';
@@ -675,12 +690,14 @@ function pCard(p){
         <span class="pcard-theme" style="background:${col}22;color:${col};border-color:${col}44">${p.theme}</span>
         ${p.boosted?'<span class="boost-tag">Boosted</span>':''}
       </div>
+      ${p.boosted?'<div class="pcard-row-l">Organic</div>':''}
       <div class="pcard-stats">
         <div class="pcard-stat"><div class="pcard-stat-v" style="color:#a78bfa">${fN(p.views)}</div><div class="pcard-stat-l">Views</div></div>
         <div class="pcard-stat"><div class="pcard-stat-v" style="color:#ec4899">${fN(p.likes)}</div><div class="pcard-stat-l">Likes</div></div>
         <div class="pcard-stat"><div class="pcard-stat-v" style="color:#f59e0b">${fN(p.saves)}</div><div class="pcard-stat-l">Saves</div></div>
-        <div class="pcard-stat"><div class="pcard-stat-v" style="color:#b8f000">${fN(p.follows)}</div><div class="pcard-stat-l">Follows</div></div>
+        <div class="pcard-stat"><div class="pcard-stat-v" style="color:#b8f000">${p.follows==null?'—':fN(p.follows)}</div><div class="pcard-stat-l">Follows</div></div>
       </div>
+      ${p.boosted?boostRow(p):''}
     </div>
   </div>`;
 }
