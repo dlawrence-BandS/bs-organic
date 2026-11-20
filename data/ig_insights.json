@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-20T13:57:09.304616Z",
+  "updated_at": "2026-11-20T14:12:56.006400Z",
   "metrics": {
     "reach": [
       {
@@ -115,7 +115,7 @@
         "end_time": "2026-11-19T08:00:00+0000"
       },
       {
-        "value": 6898,
+        "value": 7166,
         "end_time": "2026-11-20T08:00:00+0000"
       }
     ],
@@ -238,10 +238,10 @@
       }
     ],
     "website_clicks": {
-      "value": 2208
+      "value": 2209
     },
     "profile_views": {
-      "value": 9700
+      "value": 9704
     },
     "accounts_engaged": {
       "value": 3122
