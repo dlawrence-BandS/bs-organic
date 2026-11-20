@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-20T12:47:10.541421Z",
+  "updated_at": "2026-11-20T13:57:09.304616Z",
   "metrics": {
     "reach": [
       {
@@ -115,7 +115,7 @@
         "end_time": "2026-11-19T08:00:00+0000"
       },
       {
-        "value": 5583,
+        "value": 6898,
         "end_time": "2026-11-20T08:00:00+0000"
       }
     ],
@@ -238,22 +238,22 @@
       }
     ],
     "website_clicks": {
-      "value": 2206
+      "value": 2208
     },
     "profile_views": {
-      "value": 9686
+      "value": 9700
     },
     "accounts_engaged": {
-      "value": 3113
+      "value": 3122
     },
     "total_interactions": {
-      "value": 5119
+      "value": 5127
     },
     "likes": {
-      "value": 3058
+      "value": 3062
     },
     "comments": {
-      "value": 600
+      "value": 601
     }
   }
 }
