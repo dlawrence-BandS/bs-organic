@@ -72,6 +72,7 @@
   .t-Reel{background:rgba(139,92,246,.2);color:#a78bfa}.t-Carousel{background:rgba(59,130,246,.2);color:#93c5fd}.t-Static{background:rgba(255,255,255,.07);color:var(--muted)}
   .pcard-date{font-size:11px;color:var(--muted)}
   .pcard-theme{font-size:10px;padding:2px 7px;border-radius:5px;font-weight:600;border:1px solid transparent}
+  .boost-tag{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:5px;background:#f59e0b22;color:#f59e0b;border:1px solid #f59e0b44;white-space:nowrap}
   .pcard-desc{font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:10px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
   .pcard-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}
   .pcard-stat{text-align:center}
@@ -101,7 +102,7 @@
 <header>
   <div class="logo">B&amp;S <em>Organic Social</em></div>
   <div style="display:flex;align-items:center;gap:12px">
-    <span style="font-size:12px;color:var(--muted)">Jul 2025 – <strong style="color:var(--text)">Jun 2026</strong></span>
+    <span style="font-size:12px;color:var(--muted)"><span id="hdr-from">…</span> – <strong id="hdr-to" style="color:var(--text)">…</strong></span>
     <span class="hpill" id="hdr-pill">Loading…</span>
   </div>
 </header>
@@ -129,6 +130,11 @@
   <div class="fdiv"></div>
   <span class="fl">Theme</span>
   <select class="fb" id="theme-select" onchange="setTheme(this.value)"><option value="all">All themes</option></select>
+  <div class="fdiv"></div>
+  <span class="fl">Boosted</span>
+  <button class="fb active" data-boost="exclude" title="Leave boosted posts out, so paid reach doesn't skew the numbers">Exclude</button>
+  <button class="fb" data-boost="include">Include</button>
+  <button class="fb" data-boost="only" id="boost-only">Only</button>
 </div>
 
 <main>
@@ -265,7 +271,7 @@
 // ── DATA & STATE ──
 let D=[], charts={};
 let IGAccount={}, IGInsights={}, IGAudience={}, IGStories=[];
-let state={period:'all',type:'all',theme:'all',activeTab:'overview'};
+let state={period:'all',type:'all',theme:'all',boost:'exclude',activeTab:'overview'};
 let postSort={col:'date',dir:-1};
 
 const TC={Reel:'#a78bfa',Carousel:'#93c5fd',Static:'#6b7280'};
@@ -281,12 +287,31 @@ const GR={color:'rgba(255,255,255,0.04)'};
 const LG={labels:{color:'rgba(240,237,248,0.45)',font:{family:'Inter',size:11},boxWidth:9,boxHeight:9}};
 
 async function loadAll(){
-  try{ D=await fetch('data/owned_social.json').then(r=>r.json()); }catch(e){console.error(e);}
-  try{ IGAccount=await fetch('data/ig_account.json').then(r=>r.json()); }catch(e){}
-  try{ IGInsights=await fetch('data/ig_insights.json').then(r=>r.json()); }catch(e){}
-  try{ IGAudience=await fetch('data/ig_audience.json').then(r=>r.json()); }catch(e){}
-  try{ const s=await fetch('data/ig_stories.json').then(r=>r.json()); IGStories=s.stories||[]; }catch(e){}
+  // ?t= makes the browser and GitHub fetch the newest data every time,
+  // so the page never mixes old and new files just after a refresh
+  const v='?t='+Date.now();
+  try{ D=await fetch('data/owned_social.json'+v).then(r=>r.json()); }catch(e){console.error(e);}
+  try{ IGAccount=await fetch('data/ig_account.json'+v).then(r=>r.json()); }catch(e){}
+  try{ IGInsights=await fetch('data/ig_insights.json'+v).then(r=>r.json()); }catch(e){}
+  try{ IGAudience=await fetch('data/ig_audience.json'+v).then(r=>r.json()); }catch(e){}
+  try{ const s=await fetch('data/ig_stories.json'+v).then(r=>r.json()); IGStories=s.stories||[]; }catch(e){}
+  setDateRange(); setBoostCount();
   buildThemeFilter(); render(); initCompare();
+}
+
+// "Only (12)" on the Boosted switch, so it's clear how many posts are marked
+function setBoostCount(){
+  const n=(Array.isArray(D)?D:[]).filter(p=>p.boosted).length;
+  const el=document.getElementById('boost-only');
+  if(el) el.textContent=`Only (${n})`;
+}
+
+// Header label, e.g. "Jul 2025 – Nov 2026", worked out from the first and last post
+function setDateRange(){
+  const ds=(Array.isArray(D)?D:[]).map(p=>p.date).filter(Boolean).sort();
+  if(!ds.length) return;
+  document.getElementById('hdr-from').textContent=fMonthYear(ds[0]);
+  document.getElementById('hdr-to').textContent=fMonthYear(ds[ds.length-1]);
 }
 
 function filtered(){
@@ -294,8 +319,16 @@ function filtered(){
     if(state.period!=='all'){const cut=new Date();cut.setDate(cut.getDate()-+state.period);if(new Date(p.date)<cut)return false;}
     if(state.type!=='all'&&p.post_type!==state.type)return false;
     if(state.theme!=='all'&&p.theme!==state.theme)return false;
+    if(!boostOK(p))return false;
     return true;
   });
+}
+
+// Boosted posts carry paid reach and views, so they're left out unless asked for
+function boostOK(p){
+  if(state.boost==='only') return !!p.boosted;
+  if(state.boost==='exclude') return !p.boosted;
+  return true;
 }
 
 function mkKPIs(id,items){
@@ -601,7 +634,7 @@ function renderPosts(){
   const maxV=Math.max(1,...sorted.map(p=>p.views));
   document.getElementById('posts-tbody').innerHTML=sorted.map(p=>`
     <tr>
-      <td class="td-m">${fDate(p.date)}</td>
+      <td class="td-m">${fDate(p.date)}${p.boosted?' <span class="boost-tag">Boosted</span>':''}</td>
       <td><span style="font-size:9px;font-weight:700;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:${TC[p.post_type]+'33'};color:${TC[p.post_type]}">${p.post_type}</span></td>
       <td><span style="font-size:10px;padding:2px 7px;border-radius:5px;background:${(THEMES[p.theme]||'#888')+'22'};color:${THEMES[p.theme]||'#888'}">${p.theme}</span></td>
       <td>${fN(p.views)}<span class="bar-wrap"><span class="bar-fill" style="width:${(p.views/maxV*100).toFixed(0)}%;background:#a78bfa"></span></span></td>
@@ -640,6 +673,7 @@ function pCard(p){
         <span class="pcard-type t-${p.post_type}">${p.post_type}</span>
         <span class="pcard-date">${fDate(p.date)}</span>
         <span class="pcard-theme" style="background:${col}22;color:${col};border-color:${col}44">${p.theme}</span>
+        ${p.boosted?'<span class="boost-tag">Boosted</span>':''}
       </div>
       <div class="pcard-stats">
         <div class="pcard-stat"><div class="pcard-stat-v" style="color:#a78bfa">${fN(p.views)}</div><div class="pcard-stat-l">Views</div></div>
@@ -665,8 +699,8 @@ function initCompare(){
 function runCompare(){
   const aF=document.getElementById('cmp-a-from').value,aT=document.getElementById('cmp-a-to').value;
   const bF=document.getElementById('cmp-b-from').value,bT=document.getElementById('cmp-b-to').value;
-  const pA=D.filter(p=>p.date>=aF&&p.date<=aT);
-  const pB=D.filter(p=>p.date>=bF&&p.date<=bT);
+  const pA=D.filter(p=>boostOK(p)&&p.date>=aF&&p.date<=aT);
+  const pB=D.filter(p=>boostOK(p)&&p.date>=bF&&p.date<=bT);
   function agg(ps){return{n:ps.length,views:ps.reduce((s,p)=>s+p.views,0),reach:ps.reduce((s,p)=>s+p.reach,0),likes:ps.reduce((s,p)=>s+p.likes,0),comments:ps.reduce((s,p)=>s+p.comments,0),saves:ps.reduce((s,p)=>s+p.saves,0),shares:ps.reduce((s,p)=>s+p.shares,0),follows:ps.reduce((s,p)=>s+p.follows,0),eng:ps.reduce((s,p)=>s+p.engagement,0)};}
   const A=agg(pA),B=agg(pB);
   function chg(a,b){if(!a)return'—';const p=((b-a)/a*100).toFixed(0);const cl=+p>=0?'up':'dn';return `<span class="${cl}">${+p>=0?'↑':'↓'}${Math.abs(p)}%</span>`;}
@@ -733,6 +767,11 @@ document.querySelectorAll('.fb[data-period]').forEach(b=>b.addEventListener('cli
 document.querySelectorAll('.fb[data-type]').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('.fb[data-type]').forEach(x=>x.classList.remove('active'));
   b.classList.add('active');state.type=b.dataset.type;render();
+}));
+document.querySelectorAll('.fb[data-boost]').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.fb[data-boost]').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');state.boost=b.dataset.boost;render();
+  if(state.activeTab==='compare'&&document.getElementById('compare-results').innerHTML.trim()) runCompare();
 }));
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
@@ -907,6 +946,7 @@ function fN(n){n=+n;if(!n)return'0';if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>
 function fDate(d){return new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});}
 function fDateShort(d){return new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short'});}
 function fMonthShort(m){return new Date(m+'-01').toLocaleDateString('en-GB',{month:'short',year:'2-digit'});}
+function fMonthYear(d){const[y,m]=String(d).slice(0,7).split('-').map(Number);return new Date(y,m-1,1).toLocaleDateString('en-GB',{month:'short',year:'numeric'});}
 
 loadAll();
 </script>
