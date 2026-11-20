@@ -10,13 +10,20 @@ TOKEN SETUP:
   Get token from: developers.facebook.com/tools/explorer → me/accounts
   → copy the access_token value from Barker and Stonehouse.
 
+SAFETY (added Nov 2026):
+  - If the token has expired, or Instagram sends no insights at all, the
+    script stops with exit code 1 BEFORE saving anything. refresh.bat then
+    stops too, so blank data never gets pushed to the dashboard.
+  - If a later step only partly fails, the previous figures are kept
+    rather than overwritten with blanks, and a "Heads up" list is printed.
+
 Usage:
   python scripts/fetch_ig_insights.py
 
 Requires: pip install requests
 """
 
-import json, time
+import json, sys, time
 from datetime import datetime, timedelta
 from pathlib import Path
 import requests
@@ -24,6 +31,24 @@ import requests
 IG_ID   = "17841400079643420"
 BASE    = "https://graph.facebook.com/v25.0"
 DATA    = Path("data")
+WARNINGS = []
+
+
+def stop(reason):
+    """Stop before anything is saved, so refresh.bat doesn't push blanks."""
+    print()
+    print("=" * 64)
+    print("  STOPPED: " + reason)
+    print("  Nothing has been saved or pushed. The dashboard is unchanged.")
+    print()
+    print("  1. Get a new token: Graph API Explorer > me/accounts")
+    print("  2. Paste it into ig_token.txt and save")
+    print("  3. Run refresh.bat again")
+    print()
+    print("  If a new token doesn't fix it, screenshot this window for Claude.")
+    print("=" * 64)
+    sys.exit(1)
+
 
 # Read token from file to avoid paste corruption issues
 TOKEN_FILE = Path("ig_token.txt")
@@ -31,27 +56,32 @@ if not TOKEN_FILE.exists():
     print("ERROR: ig_token.txt not found.")
     print("Create ig_token.txt in the bs-organic folder with just your access token on one line.")
     print("Get token from: developers.facebook.com/tools/explorer → me/accounts")
-    exit(1)
+    sys.exit(1)
 
-TOKEN = TOKEN_FILE.read_text().strip()
+# utf-8-sig drops the hidden marker Notepad sometimes adds, and stray quote
+# marks are removed in case the token was copied with them
+TOKEN = TOKEN_FILE.read_text(encoding="utf-8-sig", errors="ignore").strip().strip("\"'").strip()
 print(f"Token loaded ({len(TOKEN)} chars)")
 
-def get(url, params=None, retries=3):
+
+def get(url, params=None, retries=3, quiet=False):
     p = dict(params or {})
     p["access_token"] = TOKEN
     for attempt in range(retries):
         try:
             r = requests.get(url, params=p, timeout=20)
             if r.status_code != 200:
-                print(f"  ✗ {r.status_code}: {r.text[:120]}")
+                if not quiet:
+                    print(f"  ✗ {r.status_code}: {r.text[:160]}")
                 return None
             return r.json()
         except Exception as e:
             if attempt < retries-1:
                 time.sleep(2)
-            else:
+            elif not quiet:
                 print(f"  ✗ Connection error: {e}")
-                return None
+    return None
+
 
 def save(filename, data):
     path = DATA / filename
@@ -59,12 +89,28 @@ def save(filename, data):
         json.dump(data, f, indent=2, ensure_ascii=False)
     print(f"  ✓ Saved {path}")
 
-# ── 1. ACCOUNT BASICS ──
-print("\n[1/5] Account basics...")
+
+def load_existing(filename, default):
+    try:
+        with open(DATA / filename, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return default
+
+
+def metric_value(entry):
+    v = entry["values"][0].get("value", 0) if entry.get("values") else entry.get("total_value", 0)
+    if isinstance(v, dict):
+        v = v.get("value", 0)
+    return v if isinstance(v, (int, float)) else 0
+
+
+# ── 1. ACCOUNT BASICS (doubles as the token check) ──
+print("\n[1/5] Checking the token...")
 account = get(f"{BASE}/{IG_ID}", {"fields": "id,username,name,biography,followers_count,follows_count,media_count,profile_picture_url,website"})
-if account:
-    save("ig_account.json", account)
-    print(f"  @{account.get('username')} | {account.get('followers_count',0):,} followers")
+if not account or not account.get("id"):
+    stop("your Instagram token has expired or is wrong.")
+print(f"  ✓ Token works: @{account.get('username')} | {account.get('followers_count',0):,} followers")
 
 # ── 2. ACCOUNT INSIGHTS (max 30 days per call) ──
 print("\n[2/5] Account insights (last 30 days)...")
@@ -75,13 +121,14 @@ insights_data = {"updated_at": datetime.now().isoformat()+"Z", "metrics": {}}
 
 # v25 supported daily metrics
 daily_metrics = [
-    ("reach",           "day"),
-    ("follower_count",  "day"),
-    ("website_clicks",  "day"),
-    ("profile_views",   "day"),
-    ("accounts_engaged","day"),
-    ("total_interactions", "day"),    ("likes",           "day"),
-    ("comments",        "day"),
+    ("reach",              "day"),
+    ("follower_count",     "day"),
+    ("website_clicks",     "day"),
+    ("profile_views",      "day"),
+    ("accounts_engaged",   "day"),
+    ("total_interactions", "day"),
+    ("likes",              "day"),
+    ("comments",           "day"),
 ]
 
 TOTAL_VALUE_METRICS = {"profile_views","website_clicks","accounts_engaged","total_interactions","likes","comments"}
@@ -108,14 +155,31 @@ for metric, period in daily_metrics:
         print(f"  ✓ {metric}")
     time.sleep(0.25)
 
+# Nothing back at all = token/permission problem, so stop before saving
+if not insights_data["metrics"]:
+    stop("Instagram didn't send any insights (usually an expired token).")
+
+# Some metrics missing: keep last refresh's figures for those
+old_metrics = load_existing("ig_insights.json", {}).get("metrics", {})
+missing = [m for m, _ in daily_metrics if m not in insights_data["metrics"]]
+for m in missing:
+    if m in old_metrics:
+        insights_data["metrics"][m] = old_metrics[m]
+if missing:
+    WARNINGS.append("Account insights didn't update for: " + ", ".join(missing))
+
+save("ig_account.json", account)
 save("ig_insights.json", insights_data)
 
 # ── 3. STORIES ──
 print("\n[3/5] Stories...")
-stories_data = {"updated_at": datetime.now().isoformat()+"Z", "stories": []}
 result = get(f"{BASE}/{IG_ID}/stories", {"fields": "id,timestamp,media_type,media_url,thumbnail_url"})
-if result and result.get("data"):
-    for story in result["data"]:
+if result is None:
+    print("  Couldn't fetch stories - keeping the existing file")
+    WARNINGS.append("Stories didn't update")
+else:
+    stories_data = {"updated_at": datetime.now().isoformat()+"Z", "stories": []}
+    for story in result.get("data", []):
         ins = get(f"{BASE}/{story['id']}/insights", {"metric": "views,reach,replies"})
         metrics = {}
         if ins and ins.get("data"):
@@ -123,13 +187,15 @@ if result and result.get("data"):
                 metrics[m["name"]] = m.get("values",[{}])[0].get("value",0) if m.get("values") else m.get("total_value",0)
         stories_data["stories"].append({**story, "insights": metrics})
         time.sleep(0.15)
-    print(f"  {len(stories_data['stories'])} active stories")
-else:
-    print("  No active stories (expire after 24hrs)")
-save("ig_stories.json", stories_data)
+    if stories_data["stories"]:
+        print(f"  {len(stories_data['stories'])} active stories")
+    else:
+        print("  No active stories (expire after 24hrs)")
+    save("ig_stories.json", stories_data)
 
 # ── 4. AUDIENCE DEMOGRAPHICS ──
 print("\n[4/5] Audience demographics...")
+old_audience = load_existing("ig_audience.json", {})
 audience_data = {"updated_at": datetime.now().isoformat()+"Z"}
 
 # v25 demographics: metric=follower_demographics, ONE breakdown per call,
@@ -143,110 +209,127 @@ demo_calls = [
     ("audience_gender_age", "follower_demographics", {"breakdown": "age,gender"}),
 ]
 
+not_updated = []
 for key, metric, extra in demo_calls:
     params = {"metric": metric, "period": "lifetime", "timeframe": "this_month", "metric_type": "total_value", **extra}
     result = get(f"{BASE}/{IG_ID}/insights", params)
+    flat = {}
     if result and result.get("data"):
-        d = result["data"][0]
-        tv = d.get("total_value", {})
-        bds = tv.get("breakdowns", [])
-        if bds:
-            # Flatten breakdown into dict
-            flat = {}
-            for bd in bds:
-                for item in bd.get("results", []):
-                    dim_values = item.get("dimension_values", [])
-                    val = item.get("value", 0)
-                    label = " ".join(dim_values)
-                    flat[label] = val
-            audience_data[key] = flat
-            print(f"  ✓ {key}: {len(flat)} entries")
-        else:
-            audience_data[key] = {}
+        tv = result["data"][0].get("total_value", {})
+        # Flatten breakdown into dict
+        for bd in tv.get("breakdowns", []):
+            for item in bd.get("results", []):
+                label = " ".join(item.get("dimension_values", []))
+                flat[label] = item.get("value", 0)
+    if flat:
+        audience_data[key] = flat
+        print(f"  ✓ {key}: {len(flat)} entries")
     else:
-        audience_data[key] = {}
+        # Keep last refresh's figures rather than blanking the chart
+        audience_data[key] = old_audience.get(key) or {}
+        not_updated.append(key)
     time.sleep(0.3)
 
+if not_updated:
+    print("  Kept previous figures for: " + ", ".join(not_updated))
+    WARNINGS.append("Audience didn't update for: " + ", ".join(not_updated))
 save("ig_audience.json", audience_data)
 
 # ── 5. UPDATE POST METRICS (only for posts in owned_social.json) ──
-print("\n[5/5] Refreshing metrics for dashboard posts only...")
+print("\n[5/5] Refreshing metrics for dashboard posts...")
 posts = json.load(open(DATA / "owned_social.json", encoding="utf-8"))
 
-# Extract shortcodes from permalinks to get media IDs
-def get_shortcode(permalink):
-    import re
-    m = re.search(r'/(reel|p)/([A-Za-z0-9_-]+)', permalink)
-    return m.group(2) if m else None
 
-# First get a lookup of shortcode -> media_id from the API
-print(f"  Fetching media IDs for {len(posts)} posts...")
-all_media = []
-url = f"{BASE}/{IG_ID}/media"
-after = None
-page = 1
-while True:
-    params = {"fields": "id,permalink,like_count,comments_count,media_type,shortcode", "limit": 50, "access_token": TOKEN}
+def norm(permalink):
+    return (permalink or "").rstrip("/") + "/"
+
+
+wanted = {norm(p.get("permalink")) for p in posts if p.get("permalink")}
+oldest = min((p.get("date") or "9999")[:10] for p in posts) if posts else ""
+
+# Page through the account's media (newest first) until every dashboard post
+# is found. This used to stop at 300 items, which skipped the oldest posts.
+print(f"  Finding {len(wanted)} dashboard posts on Instagram...")
+pl_to_item, after, pages = {}, None, 0
+while pages < 60:
+    params = {"fields": "id,permalink,timestamp,like_count,comments_count,media_type", "limit": 50}
     if after:
         params["after"] = after
-    r = requests.get(url, params=params, timeout=20)
-    data = r.json()
-    items = data.get("data", [])
+    data = get(f"{BASE}/{IG_ID}/media", params)
+    items = (data or {}).get("data", [])
     if not items:
         break
-    all_media.extend(items)
-    cursor = data.get("paging", {}).get("cursors", {}).get("after")
-    if not data.get("paging", {}).get("next") or not cursor:
+    pages += 1
+    for item in items:
+        pl = norm(item.get("permalink"))
+        if pl in wanted:
+            pl_to_item[pl] = item
+    last_day = (items[-1].get("timestamp") or "")[:10]
+    paging = data.get("paging", {})
+    after = paging.get("cursors", {}).get("after")
+    if len(pl_to_item) >= len(wanted) or (last_day and last_day < oldest) or not paging.get("next") or not after:
         break
-    after = cursor
-    page += 1
     time.sleep(0.2)
-    # Stop once we have enough — our posts are all recent
-    if len(all_media) >= 300:
-        print(f"  Fetched {len(all_media)} recent media items — stopping")
-        break
 
-print(f"  Got {len(all_media)} media items")
+print(f"  Found {len(pl_to_item)}/{len(wanted)} posts")
+not_found = len(wanted) - len(pl_to_item)
+if not_found and pl_to_item:
+    WARNINGS.append(f"{not_found} posts weren't found on Instagram (deleted or archived?), so they kept their old numbers")
 
-# Build permalink -> media_id map
-pl_to_id = {}
-for item in all_media:
-    pl = item.get("permalink","").rstrip("/")+"/"
-    pl_to_id[pl] = item
+BASE_METRICS = "reach,saved,shares,likes,comments,total_interactions"
 
-# Fetch insights only for our 229 posts
+
+def post_insights(media_id, media_type):
+    # Ask for views too (and follows on non-video posts). If Instagram refuses
+    # a metric for that post type, fall back to the shorter lists.
+    tries = [f"{BASE_METRICS},views", BASE_METRICS, "reach,saved"]
+    if media_type != "VIDEO":
+        tries.insert(0, f"{BASE_METRICS},views,follows")
+    for metrics in tries:
+        ins = get(f"{BASE}/{media_id}/insights", {"metric": metrics}, quiet=True)
+        if ins and ins.get("data"):
+            return {e["name"]: metric_value(e) for e in ins["data"]}
+    return {}
+
+
 updated = 0
 for i, post in enumerate(posts):
-    pl = post.get("permalink","").rstrip("/")+"/"
-    media_item = pl_to_id.get(pl)
-    if not media_item:
+    item = pl_to_item.get(norm(post.get("permalink")))
+    if not item:
         continue
 
-    mid = media_item["id"]
-    ins = get(f"{BASE}/{mid}/insights", {"metric": "reach,saved,shares,likes,comments,total_interactions"})
-    if not ins:
-        ins = get(f"{BASE}/{mid}/insights", {"metric": "reach,saved"})
+    m = post_insights(item["id"], item.get("media_type", ""))
+    label = post.get("date", str(i+1))
 
-    m = {}
-    if ins and ins.get("data"):
-        for entry in ins["data"]:
-            m[entry["name"]] = entry.get("values",[{}])[0].get("value",0) if entry.get("values") else entry.get("total_value",0)
-
-    if m.get("reach",0) > 0:
-        post["reach"]      = m.get("reach",0)
-        post["likes"]      = media_item.get("like_count", m.get("likes",0))
-        post["comments"]   = media_item.get("comments_count", m.get("comments",0))
-        post["saves"]      = m.get("saved",0)
-        post["shares"]     = m.get("shares",0)
-        post["engagement"] = m.get("total_interactions",0) or post["likes"]+post["comments"]+post["saves"]+post["shares"]
+    if m.get("reach", 0) > 0:
+        post["reach"]      = m.get("reach", 0)
+        post["likes"]      = item.get("like_count", m.get("likes", 0))
+        post["comments"]   = item.get("comments_count", m.get("comments", 0))
+        post["saves"]      = m.get("saved", 0)
+        post["shares"]     = m.get("shares", 0)
+        post["engagement"] = m.get("total_interactions", 0) or post["likes"]+post["comments"]+post["saves"]+post["shares"]
+        # Views and follows only ever go up, so never swap in a lower number
+        if m.get("views"):
+            post["views"] = max(post.get("views") or 0, m["views"])
+        if m.get("follows"):
+            post["follows"] = max(post.get("follows") or 0, m["follows"])
         post["api_refreshed"] = datetime.now().isoformat()+"Z"
         updated += 1
-
-    label = post.get('date', str(i+1))
-    print(f"  {i+1}/{len(posts)}: {label} ✓" if m.get("reach",0) > 0 else f"  {i+1}/{len(posts)}: {label} (no reach data)")
+        print(f"  {i+1}/{len(posts)}: {label} ✓")
+    else:
+        print(f"  {i+1}/{len(posts)}: {label} (no reach data)")
     time.sleep(0.2)
 
 print(f"\n  Updated {updated}/{len(posts)} posts with fresh metrics")
-save("owned_social.json", posts)
+if updated:
+    save("owned_social.json", posts)
+else:
+    print("  Post numbers not saved (nothing came back)")
+    WARNINGS.append("Post numbers didn't update")
+
+if WARNINGS:
+    print("\nHeads up (the rest updated fine, these kept their previous figures):")
+    for w in WARNINGS:
+        print("  - " + w)
 
 print(f"\n✓ Done! Files saved to data/")
