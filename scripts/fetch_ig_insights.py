@@ -17,13 +17,19 @@ SAFETY (added Nov 2026):
   - If a later step only partly fails, the previous figures are kept
     rather than overwritten with blanks, and a "Heads up" list is printed.
 
+BOOSTED POSTS (added Nov 2026):
+  Boosted posts get paid reach and views, which skews the organic numbers.
+  Each post is marked boosted: true/false so the dashboard can leave them
+  out. A post counts as boosted if Instagram lists an ad for it, or if its
+  link is in data/boosted.txt (for any Instagram misses).
+
 Usage:
   python scripts/fetch_ig_insights.py
 
 Requires: pip install requests
 """
 
-import json, sys, time
+import json, re, sys, time
 from datetime import datetime, timedelta
 from pathlib import Path
 import requests
@@ -244,18 +250,30 @@ def norm(permalink):
     return (permalink or "").rstrip("/") + "/"
 
 
+def shortcode(link):
+    m = re.search(r"instagram\.com/(?:[^/?#]+/)?(?:p|reel|reels|tv)/([A-Za-z0-9_-]+)", link or "")
+    return m.group(1) if m else None
+
+
 wanted = {norm(p.get("permalink")) for p in posts if p.get("permalink")}
 oldest = min((p.get("date") or "9999")[:10] for p in posts) if posts else ""
 
 # Page through the account's media (newest first) until every dashboard post
 # is found. This used to stop at 300 items, which skipped the oldest posts.
+# It also asks which posts have been boosted; if Instagram won't say, it
+# carries on without that.
 print(f"  Finding {len(wanted)} dashboard posts on Instagram...")
+MEDIA_FIELDS = "id,permalink,timestamp,like_count,comments_count,media_type"
+boost_info = True
 pl_to_item, after, pages = {}, None, 0
 while pages < 60:
-    params = {"fields": "id,permalink,timestamp,like_count,comments_count,media_type", "limit": 50}
+    params = {"fields": MEDIA_FIELDS + (",boost_ads_list" if boost_info else ""), "limit": 50}
     if after:
         params["after"] = after
-    data = get(f"{BASE}/{IG_ID}/media", params)
+    data = get(f"{BASE}/{IG_ID}/media", params, quiet=boost_info)
+    if data is None and boost_info:
+        boost_info = False      # retry this page without the boost question
+        continue
     items = (data or {}).get("data", [])
     if not items:
         break
@@ -275,6 +293,51 @@ print(f"  Found {len(pl_to_item)}/{len(wanted)} posts")
 not_found = len(wanted) - len(pl_to_item)
 if not_found and pl_to_item:
     WARNINGS.append(f"{not_found} posts weren't found on Instagram (deleted or archived?), so they kept their old numbers")
+
+# ── BOOSTED POSTS ──
+# Instagram's ad list for a post is remembered between runs, so a post stays
+# marked once boosted. data/boosted.txt adds any Instagram misses.
+BOOST_FILE = DATA / "boosted.txt"
+if not BOOST_FILE.exists():
+    BOOST_FILE.write_text(
+        "# Boosted posts\n"
+        "# Posts Instagram reports as boosted are marked automatically.\n"
+        "# Paste the link of any it misses below, one per line.\n",
+        encoding="utf-8")
+listed = set()
+for line in BOOST_FILE.read_text(encoding="utf-8-sig", errors="ignore").splitlines():
+    code = shortcode(line.strip())
+    if code and not line.strip().startswith("#"):
+        listed.add(code)
+
+
+def boost_ad_ids(item):
+    b = item.get("boost_ads_list")
+    if isinstance(b, dict):
+        b = b.get("data", [])
+    if not isinstance(b, list):
+        return []
+    return [str(x.get("ad_id") or x.get("id") or "ad") if isinstance(x, dict) else str(x) for x in b if x]
+
+
+flags_changed = False
+for post in posts:
+    item = pl_to_item.get(norm(post.get("permalink")))
+    ads = set(post.get("boost_ads") or [])
+    if item:
+        ads |= set(boost_ad_ids(item))
+    if ads:
+        post["boost_ads"] = sorted(ads)
+    boosted = bool(ads) or shortcode(post.get("permalink")) in listed
+    if post.get("boosted") != boosted:
+        flags_changed = True
+    post["boosted"] = boosted
+
+boosted_posts = sorted((p for p in posts if p["boosted"]), key=lambda p: p.get("date", ""))
+how = "checked with Instagram + data\\boosted.txt" if boost_info else "Instagram wouldn't say, so only data\\boosted.txt counts"
+print(f"  Boosted posts found: {len(boosted_posts)} ({how})")
+for p in boosted_posts:
+    print(f"    {p.get('date')}  {p.get('post_type')}  {p.get('theme')}")
 
 BASE_METRICS = "reach,saved,shares,likes,comments,total_interactions"
 
@@ -321,10 +384,10 @@ for i, post in enumerate(posts):
     time.sleep(0.2)
 
 print(f"\n  Updated {updated}/{len(posts)} posts with fresh metrics")
-if updated:
+if updated or flags_changed:
     save("owned_social.json", posts)
-else:
-    print("  Post numbers not saved (nothing came back)")
+if not updated:
+    print("  Post numbers didn't update (nothing came back)")
     WARNINGS.append("Post numbers didn't update")
 
 if WARNINGS:
